@@ -36,6 +36,7 @@ func TestOutputWriter_Set(t *testing.T) {
 }
 
 func TestOutputWriter_noopWithoutEnv(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "")
 	t.Setenv("GITHUB_OUTPUT", "")
 
 	w, err := NewOutputWriterFromEnv()
@@ -44,5 +45,15 @@ func TestOutputWriter_noopWithoutEnv(t *testing.T) {
 	}
 	if err := w.Set("request-id", "x"); err != nil {
 		t.Fatalf("Set: %v", err)
+	}
+}
+
+func TestOutputWriter_requiresOutputInGitHubActions(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "true")
+	t.Setenv("GITHUB_OUTPUT", "")
+
+	_, err := NewOutputWriterFromEnv()
+	if err == nil {
+		t.Fatal("expected error when GITHUB_OUTPUT is missing in GitHub Actions")
 	}
 }

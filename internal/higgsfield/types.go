@@ -1,14 +1,48 @@
 package higgsfield
 
-// RequestStatus values returned by the Higgsfield API.
-const (
-	StatusQueued     = "queued"
-	StatusInProgress = "in_progress"
-	StatusCompleted  = "completed"
-	StatusFailed     = "failed"
-	StatusNSFW       = "nsfw"
-	StatusCanceled   = "canceled"
+import (
+	"fmt"
+	"strings"
 )
+
+// Status is a Higgsfield request lifecycle value.
+type Status string
+
+const (
+	StatusQueued     Status = "queued"
+	StatusInProgress Status = "in_progress"
+	StatusCompleted  Status = "completed"
+	StatusFailed     Status = "failed"
+	StatusNSFW       Status = "nsfw"
+	StatusCanceled   Status = "canceled"
+)
+
+// Terminal reports whether this status is final.
+func (s Status) Terminal() bool {
+	switch s {
+	case StatusCompleted, StatusFailed, StatusNSFW, StatusCanceled:
+		return true
+	default:
+		return false
+	}
+}
+
+// FailureMessage is the user-facing text for a non-success terminal status.
+func (s Status) FailureMessage(detail *string) string {
+	switch s {
+	case StatusFailed:
+		if detail != nil && *detail != "" {
+			return fmt.Sprintf("generation failed: %s", *detail)
+		}
+		return "generation failed"
+	case StatusNSFW:
+		return "generation rejected by content moderation"
+	case StatusCanceled:
+		return "generation was canceled"
+	default:
+		return fmt.Sprintf("generation ended with status %q", s)
+	}
+}
 
 // ImageRequest is the JSON body for Soul-style text-to-image endpoints.
 type ImageRequest struct {
@@ -19,10 +53,21 @@ type ImageRequest struct {
 
 // SubmitResponse is returned immediately after a successful submission.
 type SubmitResponse struct {
-	Status    string `json:"status"`
+	Status    Status `json:"status"`
 	RequestID string `json:"request_id"`
 	StatusURL string `json:"status_url"`
 	CancelURL string `json:"cancel_url"`
+}
+
+// Validate checks that polling can start from this submission.
+func (s SubmitResponse) Validate() error {
+	if strings.TrimSpace(s.RequestID) == "" {
+		return fmt.Errorf("submit response missing request_id")
+	}
+	if strings.TrimSpace(s.StatusURL) == "" {
+		return fmt.Errorf("submit response missing status_url")
+	}
+	return nil
 }
 
 // MediaOutput holds a downloadable artifact URL.
@@ -32,7 +77,7 @@ type MediaOutput struct {
 
 // RequestStatus is the current state of a generation request.
 type RequestStatus struct {
-	Status    string        `json:"status"`
+	Status    Status        `json:"status"`
 	RequestID string        `json:"request_id"`
 	StatusURL string        `json:"status_url,omitempty"`
 	CancelURL string        `json:"cancel_url,omitempty"`
@@ -43,12 +88,12 @@ type RequestStatus struct {
 
 // Terminal reports whether the request reached a final state.
 func (s RequestStatus) Terminal() bool {
-	switch s.Status {
-	case StatusCompleted, StatusFailed, StatusNSFW, StatusCanceled:
-		return true
-	default:
-		return false
-	}
+	return s.Status.Terminal()
+}
+
+// FailureMessage is the user-facing text for a failed terminal request.
+func (s RequestStatus) FailureMessage() string {
+	return s.Status.FailureMessage(s.Error)
 }
 
 // FirstImageURL returns the first image URL when status is completed.

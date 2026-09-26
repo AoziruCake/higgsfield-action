@@ -15,8 +15,12 @@ type OutputWriter struct {
 
 // NewOutputWriterFromEnv returns a writer when GITHUB_OUTPUT is set.
 // Local runs without the variable become a no-op writer.
+// GitHub Actions runs require GITHUB_OUTPUT so step outputs are actually published.
 func NewOutputWriterFromEnv() (*OutputWriter, error) {
 	path := strings.TrimSpace(os.Getenv("GITHUB_OUTPUT"))
+	if os.Getenv("GITHUB_ACTIONS") == "true" && path == "" {
+		return nil, fmt.Errorf("GITHUB_OUTPUT is required when running in GitHub Actions")
+	}
 	return &OutputWriter{path: path}, nil
 }
 

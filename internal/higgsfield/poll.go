@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+const (
+	defaultInitialInterval = 2 * time.Second
+	defaultMaxInterval     = 10 * time.Second
+	defaultBackoffFactor   = 1.5
+	defaultMaxJitter       = 500 * time.Millisecond
+)
+
 // PollOptions configures status polling backoff.
 type PollOptions struct {
 	InitialInterval time.Duration
@@ -41,10 +48,10 @@ func (realSleeper) Sleep(ctx context.Context, d time.Duration) error {
 // DefaultPollOptions matches Higgsfield polling guidance (2s start, up to 10s, jitter).
 func DefaultPollOptions() PollOptions {
 	return PollOptions{
-		InitialInterval: 2 * time.Second,
-		MaxInterval:     10 * time.Second,
-		BackoffFactor:   1.5,
-		MaxJitter:       500 * time.Millisecond,
+		InitialInterval: defaultInitialInterval,
+		MaxInterval:     defaultMaxInterval,
+		BackoffFactor:   defaultBackoffFactor,
+		MaxJitter:       defaultMaxJitter,
 		Sleeper:         realSleeper{},
 		Jitter:          rand.Float64,
 	}
@@ -52,13 +59,13 @@ func DefaultPollOptions() PollOptions {
 
 func (o PollOptions) withDefaults() PollOptions {
 	if o.InitialInterval <= 0 {
-		o.InitialInterval = 2 * time.Second
+		o.InitialInterval = defaultInitialInterval
 	}
 	if o.MaxInterval <= 0 {
-		o.MaxInterval = 10 * time.Second
+		o.MaxInterval = defaultMaxInterval
 	}
 	if o.BackoffFactor <= 1 {
-		o.BackoffFactor = 1.5
+		o.BackoffFactor = defaultBackoffFactor
 	}
 	if o.MaxJitter < 0 {
 		o.MaxJitter = 0
@@ -87,10 +94,10 @@ func (c *Client) WaitForCompletion(ctx context.Context, statusURL string, opts P
 			if shouldStopPolling(err) {
 				return RequestStatus{}, err
 			}
-			if err := opts.Sleeper.Sleep(ctx, opts.sleepDuration(delay)); err != nil {
+			delay, err = opts.backoff(ctx, delay)
+			if err != nil {
 				return RequestStatus{}, err
 			}
-			delay = nextPollDelay(delay, opts)
 			continue
 		}
 
@@ -101,11 +108,18 @@ func (c *Client) WaitForCompletion(ctx context.Context, statusURL string, opts P
 			return status, &StatusError{Status: status}
 		}
 
-		if err := opts.Sleeper.Sleep(ctx, opts.sleepDuration(delay)); err != nil {
+		delay, err = opts.backoff(ctx, delay)
+		if err != nil {
 			return RequestStatus{}, err
 		}
-		delay = nextPollDelay(delay, opts)
 	}
+}
+
+func (o PollOptions) backoff(ctx context.Context, delay time.Duration) (time.Duration, error) {
+	if err := o.Sleeper.Sleep(ctx, o.sleepDuration(delay)); err != nil {
+		return delay, err
+	}
+	return nextPollDelay(delay, o), nil
 }
 
 func shouldStopPolling(err error) bool {

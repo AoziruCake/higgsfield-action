@@ -10,12 +10,14 @@ Maintained by **[Sugirep](https://sugirep.com)** — [AoziruCake/higgsfield-acti
 
 ```yaml
 - name: Generate image
-  uses: AoziruCake/higgsfield-action@v0.1.0
+  uses: AoziruCake/higgsfield-action@v1
   with:
     api-key: ${{ secrets.HIGGSFIELD_API_KEY }}
     prompt: "A cat programming in Go"
     output: output.png
 ```
+
+Pin a release with `@v0.1.0` if you need a fixed revision. `@v1` is the floating major tag (see [RELEASING.md](RELEASING.md)).
 
 ### Secrets
 
@@ -57,7 +59,7 @@ docker build -t higgsfield-action .
 
 ## Releasing
 
-See [RELEASING.md](RELEASING.md) for tagging `v0.1.0` and Marketplace notes.
+See [RELEASING.md](RELEASING.md) for tagging `v1` / `v0.1.0` and Marketplace notes.
 
 ## Support
 

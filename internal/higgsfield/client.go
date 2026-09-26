@@ -44,65 +44,61 @@ func (c *Client) WithBaseURL(baseURL string) *Client {
 
 // SubmitImage starts an asynchronous image generation job.
 func (c *Client) SubmitImage(ctx context.Context, model string, req ImageRequest) (SubmitResponse, error) {
-	var zero SubmitResponse
-	if err := ctx.Err(); err != nil {
-		return zero, err
-	}
-
+	var result SubmitResponse
 	endpoint, err := c.modelURL(model)
 	if err != nil {
-		return zero, err
+		return result, err
 	}
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return zero, fmt.Errorf("encode request: %w", err)
+		return result, fmt.Errorf("encode request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return zero, fmt.Errorf("create request: %w", err)
+	if err := c.doJSON(ctx, http.MethodPost, endpoint, body, &result); err != nil {
+		return result, fmt.Errorf("submit image: %w", err)
 	}
-	c.setHeaders(httpReq)
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return zero, fmt.Errorf("submit image: %w", err)
+	if err := result.Validate(); err != nil {
+		return result, err
 	}
-	defer resp.Body.Close()
-
-	if err := decodeJSON(resp, &zero); err != nil {
-		return zero, err
-	}
-	return zero, nil
+	return result, nil
 }
 
 // GetStatus fetches the current state from statusURL returned by SubmitImage.
 func (c *Client) GetStatus(ctx context.Context, statusURL string) (RequestStatus, error) {
-	var zero RequestStatus
-	if err := ctx.Err(); err != nil {
-		return zero, err
-	}
+	var result RequestStatus
 	if strings.TrimSpace(statusURL) == "" {
-		return zero, fmt.Errorf("status url is required")
+		return result, fmt.Errorf("status url is required")
+	}
+	if err := c.doJSON(ctx, http.MethodGet, statusURL, nil, &result); err != nil {
+		return result, fmt.Errorf("get status: %w", err)
+	}
+	return result, nil
+}
+
+func (c *Client) doJSON(ctx context.Context, method, url string, body []byte, dst any) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
-		return zero, fmt.Errorf("create request: %w", err)
+		return fmt.Errorf("create request: %w", err)
 	}
 	c.setHeaders(httpReq)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return zero, fmt.Errorf("get status: %w", err)
+		return err
 	}
 	defer resp.Body.Close()
 
-	if err := decodeJSON(resp, &zero); err != nil {
-		return zero, err
-	}
-	return zero, nil
+	return decodeJSON(resp, dst)
 }
 
 func (c *Client) modelURL(model string) (string, error) {

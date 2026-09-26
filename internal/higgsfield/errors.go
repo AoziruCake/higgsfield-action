@@ -31,17 +31,5 @@ type StatusError struct {
 }
 
 func (e *StatusError) Error() string {
-	switch e.Status.Status {
-	case StatusFailed:
-		if e.Status.Error != nil && *e.Status.Error != "" {
-			return fmt.Sprintf("generation failed: %s", *e.Status.Error)
-		}
-		return "generation failed"
-	case StatusNSFW:
-		return "generation rejected by content moderation"
-	case StatusCanceled:
-		return "generation was canceled"
-	default:
-		return fmt.Sprintf("generation ended with status %q", e.Status.Status)
-	}
+	return e.Status.FailureMessage()
 }

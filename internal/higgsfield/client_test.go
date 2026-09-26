@@ -64,6 +64,24 @@ func TestSubmitImage_success(t *testing.T) {
 	}
 }
 
+func TestSubmitImage_missingIdentifiers(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(higgsfield.SubmitResponse{Status: higgsfield.StatusQueued})
+	}))
+	t.Cleanup(srv.Close)
+
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
+	_, err := client.SubmitImage(context.Background(), "higgsfield-ai/soul/v2/standard", higgsfield.ImageRequest{
+		Prompt: "x",
+	})
+	if err == nil {
+		t.Fatal("expected error when request_id and status_url are missing")
+	}
+}
+
 func TestSubmitImage_unauthorized(t *testing.T) {
 	t.Parallel()
 
@@ -147,7 +165,7 @@ func TestRequestStatus_terminalStates(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		status   string
+		status   higgsfield.Status
 		terminal bool
 	}{
 		{higgsfield.StatusQueued, false},
@@ -163,5 +181,15 @@ func TestRequestStatus_terminalStates(t *testing.T) {
 		if st.Terminal() != tc.terminal {
 			t.Fatalf("status %q: terminal=%v, want %v", tc.status, st.Terminal(), tc.terminal)
 		}
+	}
+}
+
+func TestRequestStatus_failureMessage(t *testing.T) {
+	t.Parallel()
+
+	msg := "model error"
+	st := higgsfield.RequestStatus{Status: higgsfield.StatusFailed, Error: &msg}
+	if got := st.FailureMessage(); got != "generation failed: model error" {
+		t.Fatalf("FailureMessage = %q", got)
 	}
 }
