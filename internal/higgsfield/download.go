@@ -7,9 +7,10 @@ import (
 	"net/http"
 )
 
-const maxDownloadBytes = 100 << 20 // 100 MiB
+const maxDownloadBytes = 100 << 20 // 100 MiB; rejects a runaway CDN response
 
-// Download fetches media from a CDN URL returned by a completed request.
+// Download fetches media from a completed request's CDN URL.
+// The request is unauthenticated: output URLs are public for a limited time.
 func (c *Client) Download(ctx context.Context, mediaURL string, w io.Writer) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -32,6 +33,7 @@ func (c *Client) Download(ctx context.Context, mediaURL string, w io.Writer) err
 		return fmt.Errorf("download media: HTTP %d", resp.StatusCode)
 	}
 
+	// Read one extra byte so we can tell "exactly at the limit" from "over the limit".
 	limited := io.LimitReader(resp.Body, maxDownloadBytes+1)
 	n, err := io.Copy(w, limited)
 	if err != nil {

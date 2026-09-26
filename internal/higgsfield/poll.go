@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// Official polling guidance: start at 2s, grow to 10s, add a little jitter.
 const (
 	defaultInitialInterval = 2 * time.Second
 	defaultMaxInterval     = 10 * time.Second
@@ -15,16 +16,17 @@ const (
 )
 
 // PollOptions configures status polling backoff.
+// Sleeper and Jitter are injectables so tests do not wait in real time.
 type PollOptions struct {
 	InitialInterval time.Duration
 	MaxInterval     time.Duration
 	BackoffFactor   float64
 	MaxJitter       time.Duration
 	Sleeper         Sleeper
-	Jitter          func() float64
+	Jitter          func() float64 // 0..1; scaled by MaxJitter
 }
 
-// Sleeper waits between poll attempts (injectable for tests).
+// Sleeper waits between poll attempts.
 type Sleeper interface {
 	Sleep(context.Context, time.Duration) error
 }
@@ -45,7 +47,7 @@ func (realSleeper) Sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// DefaultPollOptions matches Higgsfield polling guidance (2s start, up to 10s, jitter).
+// DefaultPollOptions matches Higgsfield polling guidance.
 func DefaultPollOptions() PollOptions {
 	return PollOptions{
 		InitialInterval: defaultInitialInterval,
@@ -91,6 +93,7 @@ func (c *Client) WaitForCompletion(ctx context.Context, statusURL string, opts P
 
 		status, err := c.GetStatus(ctx, statusURL)
 		if err != nil {
+			// 4xx such as 401/404 is a config or identity problem; 5xx may be transient.
 			if shouldStopPolling(err) {
 				return RequestStatus{}, err
 			}

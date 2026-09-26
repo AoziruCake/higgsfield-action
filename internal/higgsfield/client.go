@@ -15,12 +15,14 @@ const (
 	// DefaultBaseURL is the production Higgsfield API host.
 	DefaultBaseURL = "https://api.higgsfield.ai"
 	userAgent      = "higgsfield-action/0.1.0"
+	// maxJSONBytes caps error/status payloads so a huge body cannot fill memory.
+	maxJSONBytes = 1 << 20
 )
 
 // Client calls the Higgsfield HTTP API.
 type Client struct {
 	baseURL    string
-	apiKey     string
+	apiKey     string // KEY_ID:KEY_SECRET, sent as Authorization: Key ...
 	httpClient *http.Client
 }
 
@@ -36,7 +38,7 @@ func NewClient(apiKey string, httpClient *http.Client) *Client {
 	}
 }
 
-// WithBaseURL overrides the API host (tests only).
+// WithBaseURL overrides the API host. Used by tests with httptest.Server.
 func (c *Client) WithBaseURL(baseURL string) *Client {
 	c.baseURL = strings.TrimRight(baseURL, "/")
 	return c
@@ -58,6 +60,7 @@ func (c *Client) SubmitImage(ctx context.Context, model string, req ImageRequest
 	if err := c.doJSON(ctx, http.MethodPost, endpoint, body, &result); err != nil {
 		return result, fmt.Errorf("submit image: %w", err)
 	}
+	// Refuse to poll if the API accepted the HTTP call but omitted identifiers.
 	if err := result.Validate(); err != nil {
 		return result, err
 	}
@@ -76,6 +79,7 @@ func (c *Client) GetStatus(ctx context.Context, statusURL string) (RequestStatus
 	return result, nil
 }
 
+// doJSON sends one JSON request and decodes a JSON response.
 func (c *Client) doJSON(ctx context.Context, method, url string, body []byte, dst any) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -117,7 +121,7 @@ func (c *Client) setHeaders(req *http.Request) {
 }
 
 func decodeJSON(resp *http.Response, dst any) error {
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxJSONBytes))
 	if err != nil {
 		return fmt.Errorf("read response: %w", err)
 	}

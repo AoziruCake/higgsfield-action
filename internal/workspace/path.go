@@ -1,3 +1,4 @@
+// Package workspace resolves Action output paths inside the job workspace.
 package workspace
 
 import (
@@ -8,6 +9,9 @@ import (
 )
 
 // ResolveOutputPath maps an Action output path to an absolute filesystem path.
+//
+// Relative paths are resolved from GITHUB_WORKSPACE (or the process cwd locally).
+// Paths that escape the workspace with ".." are rejected.
 func ResolveOutputPath(output string) (string, error) {
 	output = strings.TrimSpace(output)
 	if output == "" {

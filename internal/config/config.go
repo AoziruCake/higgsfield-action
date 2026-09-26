@@ -1,3 +1,4 @@
+// Package config reads GitHub Action inputs from INPUT_* environment variables.
 package config
 
 import (
@@ -7,13 +8,17 @@ import (
 	"time"
 )
 
+// DefaultModel is Soul v2 Standard, the MVP image endpoint.
 const DefaultModel = "higgsfield-ai/soul/v2/standard"
 
 // Config holds GitHub Action inputs after parsing and validation.
+//
+// Container Actions expose each input as INPUT_<NAME> with hyphens turned into
+// underscores (api-key → INPUT_API_KEY).
 type Config struct {
-	APIKey      string
+	APIKey      string // KEY_ID:KEY_SECRET
 	Prompt      string
-	Output      string
+	Output      string // workspace-relative path
 	Model       string
 	AspectRatio string
 	Resolution  string

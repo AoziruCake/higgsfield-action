@@ -24,6 +24,7 @@ func run() error {
 		return err
 	}
 
+	// Cancel HTTP work when the job is canceled (SIGTERM) or the user hits Ctrl-C.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

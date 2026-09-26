@@ -5,19 +5,19 @@ import (
 	"strings"
 )
 
-// Status is a Higgsfield request lifecycle value.
+// Status is a Higgsfield request lifecycle value from the official API.
 type Status string
 
 const (
-	StatusQueued     Status = "queued"
-	StatusInProgress Status = "in_progress"
-	StatusCompleted  Status = "completed"
-	StatusFailed     Status = "failed"
-	StatusNSFW       Status = "nsfw"
-	StatusCanceled   Status = "canceled"
+	StatusQueued     Status = "queued"      // waiting to start; may still be canceled
+	StatusInProgress Status = "in_progress" // generation has started
+	StatusCompleted  Status = "completed"   // images (or other media) are available
+	StatusFailed     Status = "failed"      // generation failed; Error may explain why
+	StatusNSFW       Status = "nsfw"        // rejected by content moderation
+	StatusCanceled   Status = "canceled"    // canceled before processing started
 )
 
-// Terminal reports whether this status is final.
+// Terminal reports whether this status is final (stop polling).
 func (s Status) Terminal() bool {
 	switch s {
 	case StatusCompleted, StatusFailed, StatusNSFW, StatusCanceled:
@@ -52,6 +52,7 @@ type ImageRequest struct {
 }
 
 // SubmitResponse is returned immediately after a successful submission.
+// Poll using StatusURL as given; do not reconstruct it from RequestID.
 type SubmitResponse struct {
 	Status    Status `json:"status"`
 	RequestID string `json:"request_id"`
@@ -83,7 +84,7 @@ type RequestStatus struct {
 	CancelURL string        `json:"cancel_url,omitempty"`
 	Error     *string       `json:"error"`
 	Images    []MediaOutput `json:"images,omitempty"`
-	Video     *MediaOutput  `json:"video,omitempty"`
+	Video     *MediaOutput  `json:"video,omitempty"` // reserved for later video models
 }
 
 // Terminal reports whether the request reached a final state.
@@ -96,7 +97,7 @@ func (s RequestStatus) FailureMessage() string {
 	return s.Status.FailureMessage(s.Error)
 }
 
-// FirstImageURL returns the first image URL when status is completed.
+// FirstImageURL returns the first image URL, if any.
 func (s RequestStatus) FirstImageURL() (string, bool) {
 	if len(s.Images) == 0 || s.Images[0].URL == "" {
 		return "", false

@@ -5,7 +5,7 @@ import "fmt"
 // APIError is a non-success HTTP response from the Higgsfield API.
 type APIError struct {
 	StatusCode int
-	Detail     string
+	Detail     string // API "detail" field when present
 }
 
 func (e *APIError) Error() string {
@@ -15,12 +15,12 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("higgsfield api: HTTP %d", e.StatusCode)
 }
 
-// IsUnauthorized reports authentication failures.
+// IsUnauthorized reports authentication failures (do not retry).
 func (e *APIError) IsUnauthorized() bool {
 	return e.StatusCode == 401
 }
 
-// IsNotFound reports missing requests or resources.
+// IsNotFound reports a missing request or resource (do not retry).
 func (e *APIError) IsNotFound() bool {
 	return e.StatusCode == 404
 }

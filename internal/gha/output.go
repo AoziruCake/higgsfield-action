@@ -1,3 +1,4 @@
+// Package gha writes step outputs to the GITHUB_OUTPUT file.
 package gha
 
 import (
@@ -8,14 +9,16 @@ import (
 	"strings"
 )
 
-// OutputWriter appends key/value pairs to GITHUB_OUTPUT.
+// OutputWriter appends key/value pairs to the GITHUB_OUTPUT file.
 type OutputWriter struct {
 	path string
 }
 
 // NewOutputWriterFromEnv returns a writer when GITHUB_OUTPUT is set.
-// Local runs without the variable become a no-op writer.
-// GitHub Actions runs require GITHUB_OUTPUT so step outputs are actually published.
+//
+// Local CLI runs omit the variable and become a no-op so tests can run offline.
+// On GitHub-hosted runners GITHUB_ACTIONS=true; missing GITHUB_OUTPUT is an error
+// because later workflow steps would silently see empty outputs.
 func NewOutputWriterFromEnv() (*OutputWriter, error) {
 	path := strings.TrimSpace(os.Getenv("GITHUB_OUTPUT"))
 	if os.Getenv("GITHUB_ACTIONS") == "true" && path == "" {
@@ -24,7 +27,7 @@ func NewOutputWriterFromEnv() (*OutputWriter, error) {
 	return &OutputWriter{path: path}, nil
 }
 
-// Set writes one output entry using the GitHub Actions format.
+// Set writes one output entry using the GitHub Actions file format.
 func (w *OutputWriter) Set(name, value string) error {
 	if w.path == "" {
 		return nil
@@ -36,6 +39,7 @@ func (w *OutputWriter) Set(name, value string) error {
 	}
 	defer f.Close()
 
+	// Multiline values must use the name<<DELIMITER heredoc form.
 	if strings.ContainsAny(value, "\n\r") {
 		delimiter := randomDelimiter()
 		if _, err := fmt.Fprintf(f, "%s<<%s\n%s\n%s\n", name, delimiter, value, delimiter); err != nil {
