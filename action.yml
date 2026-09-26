@@ -1,0 +1,45 @@
+name: Higgsfield Generate
+description: Generate Soul v2 images with the Higgsfield API (submit, poll, download)
+author: AoziruCake
+branding:
+  icon: image
+  color: purple
+
+inputs:
+  api-key:
+    description: Higgsfield API credentials in KEY_ID:KEY_SECRET format
+    required: true
+  prompt:
+    description: Text prompt for image generation
+    required: true
+  output:
+    description: Path where the generated image will be saved (relative to the workspace)
+    required: true
+  model:
+    description: Higgsfield model endpoint path
+    required: false
+    default: higgsfield-ai/soul/v2/standard
+  aspect-ratio:
+    description: "Aspect ratio for Soul v2 (e.g. 4:3, 16:9, 1:1)"
+    required: false
+    default: "4:3"
+  resolution:
+    description: "Output resolution for Soul v2 (720p or 1080p)"
+    required: false
+    default: 720p
+  timeout:
+    description: Maximum time to wait for generation (Go duration, e.g. 10m)
+    required: false
+    default: 10m
+
+outputs:
+  request-id:
+    description: Higgsfield request ID for the generation job
+  image-url:
+    description: CDN URL of the generated image
+  output-path:
+    description: Local path where the image was saved
+
+runs:
+  using: docker
+  image: Dockerfile

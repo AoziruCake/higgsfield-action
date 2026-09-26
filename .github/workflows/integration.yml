@@ -1,0 +1,48 @@
+name: Integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: Prompt sent to Soul v2
+        required: false
+        default: "A cat programming in Go"
+      output:
+        description: Output path (workspace-relative)
+        required: false
+        default: output/integration.png
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate image
+        id: higgsfield
+        uses: ./
+        with:
+          api-key: ${{ secrets.HIGGSFIELD_API_KEY }}
+          prompt: ${{ inputs.prompt }}
+          output: ${{ inputs.output }}
+          timeout: 15m
+
+      - name: Verify file exists
+        run: test -f "${{ steps.higgsfield.outputs.output-path }}"
+
+      - name: Print outputs
+        run: |
+          echo "request-id=${{ steps.higgsfield.outputs.request-id }}"
+          echo "image-url=${{ steps.higgsfield.outputs.image-url }}"
+          echo "output-path=${{ steps.higgsfield.outputs.output-path }}"
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: higgsfield-image
+          path: ${{ steps.higgsfield.outputs.output-path }}

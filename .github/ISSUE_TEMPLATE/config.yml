@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Maintainer website
+    url: https://sugirep.com
+    about: Sugirep — general inquiries (not a substitute for Issues on this repo)
+  - name: Higgsfield API docs
+    url: https://docs.higgsfield.ai/
+    about: API authentication, models, and billing

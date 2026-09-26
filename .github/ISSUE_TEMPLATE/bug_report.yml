@@ -1,0 +1,77 @@
+name: Bug report
+description: Something did not work as documented
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Do not paste your API key or `KEY_ID:KEY_SECRET`.**
+        Primary support for this Action is via GitHub Issues.
+
+  - type: input
+    id: action-version
+    attributes:
+      label: Action version
+      description: Tag or commit you use in `uses:` (e.g. `@v0.1.0` or `@main`)
+      placeholder: AoziruCake/higgsfield-action@v0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runner
+    attributes:
+      label: Runner
+      options:
+        - GitHub-hosted (ubuntu-latest)
+        - GitHub-hosted (other)
+        - Self-hosted
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Relevant workflow snippet
+      description: The step that uses this Action (redact secrets)
+      render: yaml
+      placeholder: |
+        - uses: AoziruCake/higgsfield-action@v0.1.0
+          with:
+            api-key: ${{ secrets.HIGGSFIELD_API_KEY }}
+            prompt: "..."
+            output: output.png
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Action step log or error message (no credentials)
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing Issues for duplicates
+          required: true
+        - label: I removed or redacted secrets from the text above
+          required: true

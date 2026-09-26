@@ -1,0 +1,46 @@
+name: Question
+description: Help using higgsfield-action (setup, inputs, outputs)
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask about **this GitHub Action**. For Higgsfield account or API billing, see [Higgsfield docs](https://docs.higgsfield.ai/) and their support.
+
+  - type: input
+    id: action-version
+    attributes:
+      label: Action version
+      placeholder: AoziruCake/higgsfield-action@v0.1.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you want to achieve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow (optional)
+      description: YAML snippet without secrets
+      render: yaml
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Extra context
+      description: Error messages, screenshots description, etc.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I did not include API keys or secrets in this Issue
+          required: true

@@ -1,0 +1,32 @@
+# Binaries
+/higgsfield-action
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go
+/vendor/
+coverage.out
+coverage.html
+*.out
+
+# Secrets and local environment
+.env
+.env.*
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local generation artifacts
+/output.png
+/output/
+*.local.png
