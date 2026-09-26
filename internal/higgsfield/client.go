@@ -122,7 +122,7 @@ func decodeJSON(resp *http.Response, dst any) error {
 		return fmt.Errorf("read response: %w", err)
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if !isSuccessStatus(resp.StatusCode) {
 		var errBody struct {
 			Detail string `json:"detail"`
 		}
@@ -134,4 +134,8 @@ func decodeJSON(resp *http.Response, dst any) error {
 		return fmt.Errorf("decode response: %w", err)
 	}
 	return nil
+}
+
+func isSuccessStatus(code int) bool {
+	return code >= 200 && code < 300
 }

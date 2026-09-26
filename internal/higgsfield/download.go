@@ -28,7 +28,7 @@ func (c *Client) Download(ctx context.Context, mediaURL string, w io.Writer) err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if !isSuccessStatus(resp.StatusCode) {
 		return fmt.Errorf("download media: HTTP %d", resp.StatusCode)
 	}
 
