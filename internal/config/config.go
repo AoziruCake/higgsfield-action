@@ -13,8 +13,8 @@ const DefaultModel = "higgsfield-ai/soul/v2/standard"
 
 // Config holds GitHub Action inputs after parsing and validation.
 //
-// Container Actions expose each input as INPUT_<NAME> with hyphens turned into
-// underscores (api-key → INPUT_API_KEY).
+// Docker Actions set INPUT_API-KEY (hyphen kept). Some runners and local
+// tests use INPUT_API_KEY. FromEnv accepts both.
 type Config struct {
 	APIKey      string // KEY_ID:KEY_SECRET
 	Prompt      string
@@ -28,12 +28,12 @@ type Config struct {
 // FromEnv reads Action inputs from INPUT_* environment variables.
 func FromEnv() (Config, error) {
 	cfg := Config{
-		APIKey:      strings.TrimSpace(os.Getenv("INPUT_API_KEY")),
-		Prompt:      strings.TrimSpace(os.Getenv("INPUT_PROMPT")),
-		Output:      strings.TrimSpace(os.Getenv("INPUT_OUTPUT")),
-		Model:       strings.TrimSpace(os.Getenv("INPUT_MODEL")),
-		AspectRatio: strings.TrimSpace(os.Getenv("INPUT_ASPECT_RATIO")),
-		Resolution:  strings.TrimSpace(os.Getenv("INPUT_RESOLUTION")),
+		APIKey:      actionInput("api-key"),
+		Prompt:      actionInput("prompt"),
+		Output:      actionInput("output"),
+		Model:       actionInput("model"),
+		AspectRatio: actionInput("aspect-ratio"),
+		Resolution:  actionInput("resolution"),
 		Timeout:     10 * time.Minute,
 	}
 
@@ -47,7 +47,7 @@ func FromEnv() (Config, error) {
 		cfg.Resolution = "720p"
 	}
 
-	if raw := strings.TrimSpace(os.Getenv("INPUT_TIMEOUT")); raw != "" {
+	if raw := actionInput("timeout"); raw != "" {
 		d, err := time.ParseDuration(raw)
 		if err != nil {
 			return Config{}, fmt.Errorf("invalid timeout %q: %w", raw, err)
@@ -79,6 +79,20 @@ func (c Config) Validate() error {
 		return fmt.Errorf("model is required")
 	}
 	return nil
+}
+
+// actionInput reads an Action input from the environment.
+//
+// Docker container actions pass INPUT_<name> with hyphens kept
+// (api-key → INPUT_API-KEY). Some docs and JS actions use underscores
+// (INPUT_API_KEY). Accept both so local tests and hosted runners work.
+func actionInput(name string) string {
+	upper := strings.ToUpper(name)
+	underscored := strings.ReplaceAll(upper, "-", "_")
+	if v := strings.TrimSpace(os.Getenv("INPUT_" + underscored)); v != "" {
+		return v
+	}
+	return strings.TrimSpace(os.Getenv("INPUT_" + upper))
 }
 
 func validateAPIKey(key string) error {

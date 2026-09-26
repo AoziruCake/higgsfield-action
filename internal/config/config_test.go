@@ -33,6 +33,26 @@ func TestFromEnv_valid(t *testing.T) {
 	}
 }
 
+func TestFromEnv_dockerHyphenatedInputs(t *testing.T) {
+	t.Setenv("INPUT_API_KEY", "")
+	t.Setenv("INPUT_ASPECT_RATIO", "")
+	t.Setenv("INPUT_API-KEY", "key-id:secret")
+	t.Setenv("INPUT_PROMPT", "A cat")
+	t.Setenv("INPUT_OUTPUT", "out.png")
+	t.Setenv("INPUT_ASPECT-RATIO", "16:9")
+
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if cfg.APIKey != "key-id:secret" {
+		t.Fatalf("APIKey = %q", cfg.APIKey)
+	}
+	if cfg.AspectRatio != "16:9" {
+		t.Fatalf("AspectRatio = %q", cfg.AspectRatio)
+	}
+}
+
 func TestFromEnv_invalidAPIKey(t *testing.T) {
 	t.Setenv("INPUT_API_KEY", "no-colon")
 	t.Setenv("INPUT_PROMPT", "x")
