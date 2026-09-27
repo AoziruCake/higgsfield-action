@@ -28,6 +28,15 @@ func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, 
 		return err
 	}
 
+	// Fail before SubmitImage: a later mkdir/output failure would still consume credits.
+	dest, err := prepareOutput(cfg.Output)
+	if err != nil {
+		return err
+	}
+	if err := outputs.EnsureWritable(); err != nil {
+		return err
+	}
+
 	submitted, status, err := generate(ctx, cfg, client)
 	if err != nil {
 		return err
@@ -38,12 +47,38 @@ func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, 
 		return fmt.Errorf("generation completed but no image URL in response (request_id=%s)", status.RequestID)
 	}
 
-	outputPath, err := saveImage(ctx, client, cfg.Output, imageURL)
-	if err != nil {
+	if err := saveImage(ctx, client, dest.abs, imageURL); err != nil {
 		return err
 	}
 
-	return writeOutputs(outputs, submitted, status, imageURL, outputPath)
+	return writeOutputs(outputs, submitted, status, imageURL, dest.rel)
+}
+
+type outputDest struct {
+	abs string
+	rel string
+}
+
+func prepareOutput(output string) (outputDest, error) {
+	abs, err := workspace.ResolveOutputPath(output)
+	if err != nil {
+		return outputDest{}, fmt.Errorf("resolve output path: %w", err)
+	}
+	rel, err := workspace.Rel(abs)
+	if err != nil {
+		return outputDest{}, fmt.Errorf("resolve output path: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		return outputDest{}, fmt.Errorf("create output directory: %w", err)
+	}
+	file, err := os.OpenFile(abs, os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return outputDest{}, fmt.Errorf("output path is not writable: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return outputDest{}, fmt.Errorf("output path is not writable: %w", err)
+	}
+	return outputDest{abs: abs, rel: rel}, nil
 }
 
 func generate(ctx context.Context, cfg config.Config, client *higgsfield.Client) (higgsfield.SubmitResponse, higgsfield.RequestStatus, error) {
@@ -64,25 +99,17 @@ func generate(ctx context.Context, cfg config.Config, client *higgsfield.Client)
 	return submitted, status, nil
 }
 
-func saveImage(ctx context.Context, client *higgsfield.Client, output, imageURL string) (string, error) {
-	outputPath, err := workspace.ResolveOutputPath(output)
-	if err != nil {
-		return "", fmt.Errorf("resolve output path: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
-		return "", fmt.Errorf("create output directory: %w", err)
-	}
-
+func saveImage(ctx context.Context, client *higgsfield.Client, outputPath, imageURL string) error {
 	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
-		return "", fmt.Errorf("create output file: %w", err)
+		return fmt.Errorf("create output file: %w", err)
 	}
 	defer file.Close()
 
 	if err := client.Download(ctx, imageURL, file); err != nil {
-		return "", fmt.Errorf("download image: %w", err)
+		return fmt.Errorf("download image: %w", err)
 	}
-	return outputPath, nil
+	return nil
 }
 
 func writeOutputs(outputs *gha.OutputWriter, submitted higgsfield.SubmitResponse, status higgsfield.RequestStatus, imageURL, outputPath string) error {

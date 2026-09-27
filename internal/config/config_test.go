@@ -64,6 +64,18 @@ func TestFromEnv_invalidAPIKey(t *testing.T) {
 	}
 }
 
+func TestFromEnv_invalidResolution(t *testing.T) {
+	t.Setenv("INPUT_API_KEY", "a:b")
+	t.Setenv("INPUT_PROMPT", "x")
+	t.Setenv("INPUT_OUTPUT", "out.png")
+	t.Setenv("INPUT_RESOLUTION", "4k")
+
+	_, err := FromEnv()
+	if err == nil {
+		t.Fatal("expected error for invalid resolution")
+	}
+}
+
 func TestFromEnv_invalidTimeout(t *testing.T) {
 	t.Setenv("INPUT_API_KEY", "a:b")
 	t.Setenv("INPUT_PROMPT", "x")

@@ -33,7 +33,17 @@ jobs:
           timeout: 15m
 
       - name: Verify file exists
-        run: test -f "${{ steps.higgsfield.outputs.output-path }}"
+        run: |
+          set -euo pipefail
+          rel="${{ steps.higgsfield.outputs.output-path }}"
+          case "$rel" in
+            /*)
+              echo "output-path must be workspace-relative, got $rel" >&2
+              exit 1
+              ;;
+          esac
+          test -f "$GITHUB_WORKSPACE/$rel"
+          test -f "$GITHUB_WORKSPACE/${{ inputs.output }}"
 
       - name: Print outputs
         run: |
@@ -45,4 +55,4 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: higgsfield-image
-          path: ${{ steps.higgsfield.outputs.output-path }}
+          path: ${{ inputs.output }}

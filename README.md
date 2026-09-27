@@ -41,7 +41,7 @@ Create a repository secret `HIGGSFIELD_API_KEY` with your credentials in **`KEY_
 |--------|-------------|
 | `request-id` | Higgsfield request ID |
 | `image-url` | Generated image CDN URL |
-| `output-path` | Absolute path where the image was saved |
+| `output-path` | Workspace-relative path of the saved image |
 
 ## Development
 
@@ -63,6 +63,8 @@ docker build -t higgsfield-action .
 |-------|------------|
 | `api-key is required` | The Action now reads Docker's `INPUT_API-KEY`. Update to a commit that includes that fix and rerun. |
 | `not enough credits` / HTTP 403 | The API key is valid, but the Higgsfield account has no remaining credits. Add credits in [Higgsfield Cloud](https://console.higgsfield.ai) and rerun. |
+| `create output directory: ... permission denied` | The Action container must run as root so it can write to `GITHUB_WORKSPACE`. Update to a commit that drops Distroless `:nonroot` and rerun. |
+| Later step cannot find `output-path` | `output-path` is workspace-relative (not `/github/workspace/...`). Use `$GITHUB_WORKSPACE/${{ steps.higgsfield.outputs.output-path }}` or the `output` input. |
 
 ## Releasing
 

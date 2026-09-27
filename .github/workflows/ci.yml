@@ -32,3 +32,16 @@ jobs:
 
       - name: Build container
         run: docker build -t higgsfield-action:ci .
+
+      - name: Action user can write GITHUB_WORKSPACE
+        run: |
+          set -euo pipefail
+          image_user="$(docker image inspect higgsfield-action:ci --format '{{.Config.User}}')"
+          if [ -z "$image_user" ]; then
+            image_user=0
+          fi
+          workdir="$(mktemp -d)"
+          docker run --rm -v "$workdir:/github/workspace" alpine:3.21 \
+            sh -c 'chown 1001:1001 /github/workspace && chmod 0755 /github/workspace'
+          docker run --rm --user "$image_user" -v "$workdir:/github/workspace" alpine:3.21 \
+            mkdir /github/workspace/output

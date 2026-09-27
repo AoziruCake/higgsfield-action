@@ -38,7 +38,7 @@ outputs:
   image-url:
     description: CDN URL of the generated image
   output-path:
-    description: Local path where the image was saved
+    description: Workspace-relative path of the saved image (usable by later job steps on the runner)
 
 runs:
   using: docker

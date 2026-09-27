@@ -78,6 +78,11 @@ func (c Config) Validate() error {
 	if c.Model == "" {
 		return fmt.Errorf("model is required")
 	}
+	switch c.Resolution {
+	case "", "720p", "1080p":
+	default:
+		return fmt.Errorf("resolution must be 720p or 1080p, got %q", c.Resolution)
+	}
 	return nil
 }
 

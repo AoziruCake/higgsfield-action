@@ -27,6 +27,18 @@ func NewOutputWriterFromEnv() (*OutputWriter, error) {
 	return &OutputWriter{path: path}, nil
 }
 
+// EnsureWritable opens GITHUB_OUTPUT before any paid API work.
+func (w *OutputWriter) EnsureWritable() error {
+	if w.path == "" {
+		return nil
+	}
+	f, err := os.OpenFile(w.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("GITHUB_OUTPUT is not writable: %w", err)
+	}
+	return f.Close()
+}
+
 // Set writes one output entry using the GitHub Actions file format.
 func (w *OutputWriter) Set(name, value string) error {
 	if w.path == "" {

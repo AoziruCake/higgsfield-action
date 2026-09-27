@@ -35,6 +35,32 @@ func TestOutputWriter_Set(t *testing.T) {
 	}
 }
 
+func TestOutputWriter_EnsureWritable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "github-output")
+	t.Setenv("GITHUB_OUTPUT", path)
+
+	w, err := NewOutputWriterFromEnv()
+	if err != nil {
+		t.Fatalf("NewOutputWriterFromEnv: %v", err)
+	}
+	if err := w.EnsureWritable(); err != nil {
+		t.Fatalf("EnsureWritable: %v", err)
+	}
+}
+
+func TestOutputWriter_EnsureWritableMissingParent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing", "github-output")
+	t.Setenv("GITHUB_OUTPUT", path)
+
+	w, err := NewOutputWriterFromEnv()
+	if err != nil {
+		t.Fatalf("NewOutputWriterFromEnv: %v", err)
+	}
+	if err := w.EnsureWritable(); err == nil {
+		t.Fatal("expected error when GITHUB_OUTPUT parent is missing")
+	}
+}
+
 func TestOutputWriter_noopWithoutEnv(t *testing.T) {
 	t.Setenv("GITHUB_ACTIONS", "")
 	t.Setenv("GITHUB_OUTPUT", "")
