@@ -6,6 +6,10 @@ Docker Container Action (Go) for **Soul v2 Standard** text-to-image: submit, pol
 
 Maintained by **[Sugirep](https://sugirep.com)** — [AoziruCake/higgsfield-action](https://github.com/AoziruCake/higgsfield-action) on GitHub.
 
+This Action calls a **generative AI** model (Higgsfield Soul v2). Outputs are not guaranteed to be accurate, appropriate, or fit for any purpose. Generation uses **the caller's** Higgsfield account: their [terms](https://docs.higgsfield.ai/), credits, and content moderation apply. This Action does not warrant prompts or generated images.
+
+Support is via [GitHub Issues](https://github.com/AoziruCake/higgsfield-action/issues). The software is licensed under [MIT](LICENSE).
+
 ## Usage
 
 ```yaml
