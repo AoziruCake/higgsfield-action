@@ -131,3 +131,40 @@ func TestExecute_preflightSkipsAPI(t *testing.T) {
 		t.Fatalf("API calls = %d, want 0", posts)
 	}
 }
+
+func TestExecute_preflightDoesNotCreateOutputFile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]string{"detail": "not_enough_credits"})
+	}))
+	t.Cleanup(srv.Close)
+
+	root := t.TempDir()
+	outputFile := filepath.Join(root, "output", "integration.png")
+	t.Setenv("GITHUB_WORKSPACE", root)
+	t.Setenv("GITHUB_OUTPUT", filepath.Join(root, "github-output"))
+
+	cfg := config.Config{
+		APIKey:      "id:secret",
+		Prompt:      "A cat",
+		Output:      "output/integration.png",
+		Model:       config.DefaultModel,
+		AspectRatio: "4:3",
+		Resolution:  "720p",
+		Timeout:     time.Minute,
+	}
+
+	client := higgsfield.NewClient(cfg.APIKey, srv.Client()).WithBaseURL(srv.URL)
+	outputs, err := gha.NewOutputWriterFromEnv()
+	if err != nil {
+		t.Fatalf("NewOutputWriterFromEnv: %v", err)
+	}
+
+	if err := execute(context.Background(), cfg, client, outputs); err == nil {
+		t.Fatal("expected generate error")
+	}
+	if _, err := os.Stat(outputFile); !os.IsNotExist(err) {
+		t.Fatalf("output file should not exist after failed generate: %v", err)
+	}
+}

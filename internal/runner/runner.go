@@ -68,17 +68,27 @@ func prepareOutput(output string) (outputDest, error) {
 	if err != nil {
 		return outputDest{}, fmt.Errorf("resolve output path: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+	dir := filepath.Dir(abs)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return outputDest{}, fmt.Errorf("create output directory: %w", err)
 	}
-	file, err := os.OpenFile(abs, os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return outputDest{}, fmt.Errorf("output path is not writable: %w", err)
-	}
-	if err := file.Close(); err != nil {
+	if err := probeWritableDir(dir); err != nil {
 		return outputDest{}, fmt.Errorf("output path is not writable: %w", err)
 	}
 	return outputDest{abs: abs, rel: rel}, nil
+}
+
+func probeWritableDir(dir string) error {
+	file, err := os.CreateTemp(dir, ".higgsfield-action-write-*")
+	if err != nil {
+		return err
+	}
+	name := file.Name()
+	if err := file.Close(); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	return os.Remove(name)
 }
 
 func generate(ctx context.Context, cfg config.Config, client *higgsfield.Client) (higgsfield.SubmitResponse, higgsfield.RequestStatus, error) {
