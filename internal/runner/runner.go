@@ -53,7 +53,7 @@ func generate(ctx context.Context, cfg config.Config, client *higgsfield.Client)
 		Resolution:  cfg.Resolution,
 	})
 	if err != nil {
-		return submitted, higgsfield.RequestStatus{}, fmt.Errorf("submit image: %w", err)
+		return submitted, higgsfield.RequestStatus{}, err
 	}
 
 	// Use the status_url from the submit response; do not build it from request_id.

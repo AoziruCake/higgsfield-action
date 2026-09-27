@@ -82,6 +82,15 @@ func TestSubmitImage_missingIdentifiers(t *testing.T) {
 	}
 }
 
+func TestAPIError_notEnoughCredits(t *testing.T) {
+	t.Parallel()
+
+	err := &higgsfield.APIError{StatusCode: http.StatusForbidden, Detail: "not_enough_credits"}
+	if !strings.Contains(err.Error(), "no remaining credits") {
+		t.Fatalf("Error = %q", err.Error())
+	}
+}
+
 func TestSubmitImage_unauthorized(t *testing.T) {
 	t.Parallel()
 

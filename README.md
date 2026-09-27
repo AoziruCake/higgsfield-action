@@ -57,6 +57,13 @@ docker build -t higgsfield-action .
 2. Run **Actions → Integration → Run workflow** ([integration.yml](.github/workflows/integration.yml)).
 3. Download the `higgsfield-image` artifact from the completed run.
 
+### Troubleshooting
+
+| Error | What to do |
+|-------|------------|
+| `api-key is required` | The Action now reads Docker's `INPUT_API-KEY`. Update to a commit that includes that fix and rerun. |
+| `not enough credits` / HTTP 403 | The API key is valid, but the Higgsfield account has no remaining credits. Add credits in [Higgsfield Cloud](https://console.higgsfield.ai) and rerun. |
+
 ## Releasing
 
 See [RELEASING.md](RELEASING.md) for tagging `v1` / `v0.1.0` and Marketplace notes.

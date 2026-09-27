@@ -9,6 +9,9 @@ type APIError struct {
 }
 
 func (e *APIError) Error() string {
+	if e.StatusCode == 403 && e.Detail == "not_enough_credits" {
+		return "higgsfield api: account has no remaining credits (HTTP 403)"
+	}
 	if e.Detail != "" {
 		return fmt.Sprintf("higgsfield api: %s (HTTP %d)", e.Detail, e.StatusCode)
 	}
