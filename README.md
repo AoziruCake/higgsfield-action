@@ -1,12 +1,12 @@
 # higgsfield-action
 
-Generate images with the [Higgsfield API](https://docs.higgsfield.ai/) from GitHub Actions.
+Generate images and videos with the [Higgsfield API](https://docs.higgsfield.ai/) from GitHub Actions.
 
-Docker Container Action (Go) for **Soul v2 Standard** text-to-image: submit, poll, download, and write outputs.
+Docker Container Action (Go) for **Soul v2 Standard** text-to-image and **Seedance 2.5** text-to-video: submit, poll, download, and write outputs.
 
 Maintained by **[Sugirep](https://sugirep.com)** — [AoziruCake/higgsfield-action](https://github.com/AoziruCake/higgsfield-action) on GitHub.
 
-This Action calls a **generative AI** model (Higgsfield Soul v2). Outputs are not guaranteed to be accurate, appropriate, or fit for any purpose. Generation uses **the caller's** Higgsfield account: their [terms](https://docs.higgsfield.ai/), credits, and content moderation apply. This Action does not warrant prompts or generated images.
+This Action calls a **generative AI** model (Higgsfield Soul v2, or Seedance 2.5 for video). Outputs are not guaranteed to be accurate, appropriate, or fit for any purpose. Generation uses **the caller's** Higgsfield account: their [terms](https://docs.higgsfield.ai/), credits, and content moderation apply. This Action does not warrant prompts or generated media.
 
 Support is via [GitHub Issues](https://github.com/AoziruCake/higgsfield-action/issues). The software is licensed under [MIT](LICENSE).
 
@@ -21,6 +21,21 @@ Support is via [GitHub Issues](https://github.com/AoziruCake/higgsfield-action/i
     output: output.png
 ```
 
+Text-to-video uses [Seedance 2.5](https://docs.higgsfield.ai/docs/models/seedance-2-5/text-to-video). Other video endpoints are rejected before submission.
+
+```yaml
+- name: Generate video
+  uses: AoziruCake/higgsfield-action@v1
+  with:
+    api-key: ${{ secrets.HIGGSFIELD_API_KEY }}
+    prompt: "A cat programming in Go, cinematic camera move"
+    model: bytedance/seedance-2.5/text-to-video
+    output: output.mp4
+    timeout: 20m
+```
+
+`aspect-ratio` defaults to `16:9`, `resolution` to `720p`, and `duration` to `5` when `model` is Seedance 2.5 text-to-video. `duration` is rejected for image models.
+
 Pin a release with `@v0.1.0` if you need a fixed revision. `@v1` is the floating major tag (see [RELEASING.md](RELEASING.md)).
 
 ### Secrets
@@ -34,18 +49,20 @@ Create a repository secret `HIGGSFIELD_API_KEY` with your credentials in **`KEY_
 | `api-key` | yes | — | `KEY_ID:KEY_SECRET` |
 | `prompt` | yes | — | Text prompt |
 | `output` | yes | — | Output file path (workspace-relative) |
-| `model` | no | `higgsfield-ai/soul/v2/standard` | Model endpoint path |
-| `aspect-ratio` | no | `4:3` | Soul v2 aspect ratio |
-| `resolution` | no | `720p` | `720p` or `1080p` |
-| `timeout` | no | `10m` | Max wait time (Go duration) |
+| `model` | no | `higgsfield-ai/soul/v2/standard` | Model endpoint path. Video: `bytedance/seedance-2.5/text-to-video` |
+| `aspect-ratio` | no | `4:3` for images, `16:9` for Seedance 2.5 | Soul v2 accepts its usual ratios. Seedance 2.5 accepts `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9` |
+| `resolution` | no | `720p` | Images: `720p` or `1080p`. Seedance 2.5 also accepts `480p` |
+| `duration` | no | `5` for Seedance 2.5 | Seconds, `4`–`30`. Video only |
+| `timeout` | no | `10m` | Max wait time (Go duration). Use `20m` or more for video |
 
 ### Outputs
 
 | Output | Description |
 |--------|-------------|
 | `request-id` | Higgsfield request ID |
-| `image-url` | Generated image CDN URL |
-| `output-path` | Workspace-relative path of the saved image |
+| `image-url` | Generated image CDN URL (image runs) |
+| `video-url` | Generated video CDN URL (Seedance 2.5 runs) |
+| `output-path` | Workspace-relative path of the saved file |
 
 ## Development
 
@@ -60,6 +77,8 @@ docker build -t higgsfield-action .
 1. Add secret `HIGGSFIELD_API_KEY` to the repository.
 2. Run **Actions → Integration → Run workflow** ([integration.yml](.github/workflows/integration.yml)).
 3. Download the `higgsfield-image` artifact from the completed run.
+
+The workflow dispatch form accepts `model` and `duration`. Leave them at the defaults for an image. For a video run, set `model` to `bytedance/seedance-2.5/text-to-video` and `output` to a path such as `output/integration.mp4`. `duration` can stay empty (the Action uses 5 seconds).
 
 ### Troubleshooting
 

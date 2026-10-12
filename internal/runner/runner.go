@@ -1,4 +1,4 @@
-// Package runner runs one image-generation Action: submit, poll, save, outputs.
+// Package runner runs one generation Action: submit, poll, save, outputs.
 package runner
 
 import (
@@ -28,7 +28,7 @@ func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, 
 		return err
 	}
 
-	// Fail before SubmitImage: a later mkdir/output failure would still consume credits.
+	// Fail before submit: a later mkdir/output failure would still consume credits.
 	dest, err := prepareOutput(cfg.Output)
 	if err != nil {
 		return err
@@ -42,16 +42,39 @@ func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, 
 		return err
 	}
 
-	imageURL, ok := status.FirstImageURL()
-	if !ok {
-		return fmt.Errorf("generation completed but no image URL in response (request_id=%s)", status.RequestID)
-	}
-
-	if err := saveImage(ctx, client, dest.abs, imageURL); err != nil {
+	mediaURL, outputName, err := completedMedia(cfg, status)
+	if err != nil {
 		return err
 	}
 
-	return writeOutputs(outputs, submitted, status, imageURL, dest.rel)
+	if err := saveMedia(ctx, client, dest.abs, mediaURL, mediaKind(cfg)); err != nil {
+		return err
+	}
+
+	return writeOutputs(outputs, submitted, status, outputName, mediaURL, dest.rel)
+}
+
+func completedMedia(cfg config.Config, status higgsfield.RequestStatus) (url, outputName string, err error) {
+	if cfg.IsVideo() {
+		videoURL, ok := status.VideoURL()
+		if !ok {
+			return "", "", fmt.Errorf("generation completed but no video URL in response (request_id=%s)", status.RequestID)
+		}
+		return videoURL, "video-url", nil
+	}
+
+	imageURL, ok := status.FirstImageURL()
+	if !ok {
+		return "", "", fmt.Errorf("generation completed but no image URL in response (request_id=%s)", status.RequestID)
+	}
+	return imageURL, "image-url", nil
+}
+
+func mediaKind(cfg config.Config) string {
+	if cfg.IsVideo() {
+		return "video"
+	}
+	return "image"
 }
 
 type outputDest struct {
@@ -92,11 +115,7 @@ func probeWritableDir(dir string) error {
 }
 
 func generate(ctx context.Context, cfg config.Config, client *higgsfield.Client) (higgsfield.SubmitResponse, higgsfield.RequestStatus, error) {
-	submitted, err := client.SubmitImage(ctx, cfg.Model, higgsfield.ImageRequest{
-		Prompt:      cfg.Prompt,
-		AspectRatio: cfg.AspectRatio,
-		Resolution:  cfg.Resolution,
-	})
+	submitted, err := submit(ctx, cfg, client)
 	if err != nil {
 		return submitted, higgsfield.RequestStatus{}, err
 	}
@@ -109,20 +128,36 @@ func generate(ctx context.Context, cfg config.Config, client *higgsfield.Client)
 	return submitted, status, nil
 }
 
-func saveImage(ctx context.Context, client *higgsfield.Client, outputPath, imageURL string) error {
+func submit(ctx context.Context, cfg config.Config, client *higgsfield.Client) (higgsfield.SubmitResponse, error) {
+	if cfg.IsVideo() {
+		return client.SubmitVideo(ctx, cfg.Model, higgsfield.VideoRequest{
+			Prompt:      cfg.Prompt,
+			Duration:    cfg.Duration,
+			Resolution:  cfg.Resolution,
+			AspectRatio: cfg.AspectRatio,
+		})
+	}
+	return client.SubmitImage(ctx, cfg.Model, higgsfield.ImageRequest{
+		Prompt:      cfg.Prompt,
+		AspectRatio: cfg.AspectRatio,
+		Resolution:  cfg.Resolution,
+	})
+}
+
+func saveMedia(ctx context.Context, client *higgsfield.Client, outputPath, mediaURL, kind string) error {
 	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return fmt.Errorf("create output file: %w", err)
 	}
 	defer file.Close()
 
-	if err := client.Download(ctx, imageURL, file); err != nil {
-		return fmt.Errorf("download image: %w", err)
+	if err := client.Download(ctx, mediaURL, file); err != nil {
+		return fmt.Errorf("download %s: %w", kind, err)
 	}
 	return nil
 }
 
-func writeOutputs(outputs *gha.OutputWriter, submitted higgsfield.SubmitResponse, status higgsfield.RequestStatus, imageURL, outputPath string) error {
+func writeOutputs(outputs *gha.OutputWriter, submitted higgsfield.SubmitResponse, status higgsfield.RequestStatus, mediaOutputName, mediaURL, outputPath string) error {
 	requestID := status.RequestID
 	if requestID == "" {
 		requestID = submitted.RequestID
@@ -131,8 +166,8 @@ func writeOutputs(outputs *gha.OutputWriter, submitted higgsfield.SubmitResponse
 	if err := outputs.Set("request-id", requestID); err != nil {
 		return fmt.Errorf("set output request-id: %w", err)
 	}
-	if err := outputs.Set("image-url", imageURL); err != nil {
-		return fmt.Errorf("set output image-url: %w", err)
+	if err := outputs.Set(mediaOutputName, mediaURL); err != nil {
+		return fmt.Errorf("set output %s: %w", mediaOutputName, err)
 	}
 	if err := outputs.Set("output-path", outputPath); err != nil {
 		return fmt.Errorf("set output output-path: %w", err)

@@ -46,19 +46,28 @@ func (c *Client) WithBaseURL(baseURL string) *Client {
 
 // SubmitImage starts an asynchronous image generation job.
 func (c *Client) SubmitImage(ctx context.Context, model string, req ImageRequest) (SubmitResponse, error) {
+	return c.submit(ctx, model, req, "submit image")
+}
+
+// SubmitVideo starts an asynchronous Seedance 2.5 text-to-video job.
+func (c *Client) SubmitVideo(ctx context.Context, model string, req VideoRequest) (SubmitResponse, error) {
+	return c.submit(ctx, model, req, "submit video")
+}
+
+func (c *Client) submit(ctx context.Context, model string, payload any, op string) (SubmitResponse, error) {
 	var result SubmitResponse
 	endpoint, err := c.modelURL(model)
 	if err != nil {
 		return result, err
 	}
 
-	body, err := json.Marshal(req)
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return result, fmt.Errorf("encode request: %w", err)
 	}
 
 	if err := c.doJSON(ctx, http.MethodPost, endpoint, body, &result); err != nil {
-		return result, fmt.Errorf("submit image: %w", err)
+		return result, fmt.Errorf("%s: %w", op, err)
 	}
 	// Refuse to poll if the API accepted the HTTP call but omitted identifiers.
 	if err := result.Validate(); err != nil {
@@ -67,7 +76,7 @@ func (c *Client) SubmitImage(ctx context.Context, model string, req ImageRequest
 	return result, nil
 }
 
-// GetStatus fetches the current state from statusURL returned by SubmitImage.
+// GetStatus fetches the current state from statusURL returned by submit.
 func (c *Client) GetStatus(ctx context.Context, statusURL string) (RequestStatus, error) {
 	var result RequestStatus
 	if strings.TrimSpace(statusURL) == "" {

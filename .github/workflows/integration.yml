@@ -4,13 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       prompt:
-        description: Prompt sent to Soul v2
+        description: Prompt sent to the model
         required: false
         default: "A cat programming in Go"
       output:
         description: Output path (workspace-relative)
         required: false
         default: output/integration.png
+      model:
+        description: Model endpoint path. Use bytedance/seedance-2.5/text-to-video for a video run.
+        required: false
+        default: higgsfield-ai/soul/v2/standard
+      duration:
+        description: Duration in seconds for Seedance 2.5 text-to-video. Leave empty for images.
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -23,13 +31,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Generate image
+      - name: Generate
         id: higgsfield
         uses: ./
         with:
           api-key: ${{ secrets.HIGGSFIELD_API_KEY }}
           prompt: ${{ inputs.prompt }}
           output: ${{ inputs.output }}
+          model: ${{ inputs.model }}
+          duration: ${{ inputs.duration }}
           timeout: 15m
 
       - name: Verify file exists
@@ -49,6 +59,7 @@ jobs:
         run: |
           echo "request-id=${{ steps.higgsfield.outputs.request-id }}"
           echo "image-url=${{ steps.higgsfield.outputs.image-url }}"
+          echo "video-url=${{ steps.higgsfield.outputs.video-url }}"
           echo "output-path=${{ steps.higgsfield.outputs.output-path }}"
 
       - name: Upload image artifact
