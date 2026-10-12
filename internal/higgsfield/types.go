@@ -51,6 +51,15 @@ type ImageRequest struct {
 	Resolution  string `json:"resolution"`
 }
 
+// VideoRequest is the JSON body for Seedance 2.5 text-to-video.
+// Only these fields are sent: the endpoint rejects unknown properties.
+type VideoRequest struct {
+	Prompt      string `json:"prompt"`
+	Duration    int    `json:"duration"`
+	Resolution  string `json:"resolution"`
+	AspectRatio string `json:"aspect_ratio"`
+}
+
 // SubmitResponse is returned immediately after a successful submission.
 // Poll using StatusURL as given; do not reconstruct it from RequestID.
 type SubmitResponse struct {
@@ -84,7 +93,7 @@ type RequestStatus struct {
 	CancelURL string        `json:"cancel_url,omitempty"`
 	Error     *string       `json:"error"`
 	Images    []MediaOutput `json:"images,omitempty"`
-	Video     *MediaOutput  `json:"video,omitempty"` // reserved for later video models
+	Video     *MediaOutput  `json:"video,omitempty"`
 }
 
 // Terminal reports whether the request reached a final state.
@@ -103,4 +112,12 @@ func (s RequestStatus) FirstImageURL() (string, bool) {
 		return "", false
 	}
 	return s.Images[0].URL, true
+}
+
+// VideoURL returns the completed video URL, if any.
+func (s RequestStatus) VideoURL() (string, bool) {
+	if s.Video == nil || s.Video.URL == "" {
+		return "", false
+	}
+	return s.Video.URL, true
 }

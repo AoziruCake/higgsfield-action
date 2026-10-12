@@ -64,6 +64,74 @@ func TestSubmitImage_success(t *testing.T) {
 	}
 }
 
+func TestSubmitVideo_body(t *testing.T) {
+	t.Parallel()
+
+	var gotPath string
+	var raw map[string]json.RawMessage
+
+	srv := httptest.NewServer(nil)
+	t.Cleanup(srv.Close)
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			t.Errorf("decode body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(higgsfield.SubmitResponse{
+			Status:    higgsfield.StatusQueued,
+			RequestID: "req-v",
+			StatusURL: srv.URL + "/requests/req-v/status",
+		})
+	})
+
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
+	_, err := client.SubmitVideo(context.Background(), "bytedance/seedance-2.5/text-to-video", higgsfield.VideoRequest{
+		Prompt:      "A cat",
+		Duration:    5,
+		Resolution:  "720p",
+		AspectRatio: "16:9",
+	})
+	if err != nil {
+		t.Fatalf("SubmitVideo: %v", err)
+	}
+	if !strings.HasSuffix(gotPath, "/bytedance/seedance-2.5/text-to-video") {
+		t.Fatalf("path = %q", gotPath)
+	}
+	if len(raw) != 4 {
+		t.Fatalf("body fields = %d (%v), want prompt, duration, resolution, aspect_ratio", len(raw), raw)
+	}
+	for _, key := range []string{"prompt", "duration", "resolution", "aspect_ratio"} {
+		if _, ok := raw[key]; !ok {
+			t.Fatalf("missing %s in %v", key, raw)
+		}
+	}
+	if string(raw["duration"]) != "5" {
+		t.Fatalf("duration = %s", raw["duration"])
+	}
+	for _, key := range []string{"bitrate_mode", "output_format", "generate_audio"} {
+		if _, ok := raw[key]; ok {
+			t.Fatalf("unexpected field %s", key)
+		}
+	}
+}
+
+func TestRequestStatus_videoURL(t *testing.T) {
+	t.Parallel()
+
+	st := higgsfield.RequestStatus{Video: &higgsfield.MediaOutput{URL: "https://cdn.example/out.mp4"}}
+	url, ok := st.VideoURL()
+	if !ok || url != "https://cdn.example/out.mp4" {
+		t.Fatalf("VideoURL = %q, ok=%v", url, ok)
+	}
+	if _, ok := (higgsfield.RequestStatus{}).VideoURL(); ok {
+		t.Fatal("expected no video URL")
+	}
+	if _, ok := (higgsfield.RequestStatus{Video: &higgsfield.MediaOutput{}}).VideoURL(); ok {
+		t.Fatal("expected no video URL when url is empty")
+	}
+}
+
 func TestSubmitImage_missingIdentifiers(t *testing.T) {
 	t.Parallel()
 

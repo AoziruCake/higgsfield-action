@@ -90,6 +90,100 @@ func TestExecute_success(t *testing.T) {
 	if !strings.Contains(content, "output-path=out.png\n") {
 		t.Fatalf("outputs = %q", content)
 	}
+	if strings.Contains(content, "video-url=") {
+		t.Fatalf("image run set video-url: %q", content)
+	}
+}
+
+func TestExecute_videoSuccess(t *testing.T) {
+	videoBody := []byte("mp4-bytes")
+	srv := httptest.NewServer(nil)
+	t.Cleanup(srv.Close)
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/bytedance/seedance-2.5/text-to-video"):
+			var body map[string]json.RawMessage
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode body: %v", err)
+			}
+			if len(body) != 4 {
+				t.Errorf("body fields = %d, want 4", len(body))
+			}
+			if string(body["duration"]) != "5" {
+				t.Errorf("duration = %s", body["duration"])
+			}
+			_ = json.NewEncoder(w).Encode(higgsfield.SubmitResponse{
+				Status:    higgsfield.StatusQueued,
+				RequestID: "req-v",
+				StatusURL: srv.URL + "/requests/req-v/status",
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/requests/req-v/status":
+			_ = json.NewEncoder(w).Encode(higgsfield.RequestStatus{
+				Status:    higgsfield.StatusCompleted,
+				RequestID: "req-v",
+				Video:     &higgsfield.MediaOutput{URL: srv.URL + "/out.mp4"},
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/out.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write(videoBody)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+
+	root := t.TempDir()
+	outputFile := filepath.Join(root, "out.mp4")
+	outputsPath := filepath.Join(root, "github-output")
+	t.Setenv("GITHUB_WORKSPACE", root)
+	t.Setenv("GITHUB_OUTPUT", outputsPath)
+
+	cfg := config.Config{
+		APIKey:      "id:secret",
+		Prompt:      "A cat",
+		Output:      "out.mp4",
+		Model:       config.VideoModel,
+		AspectRatio: "16:9",
+		Resolution:  "720p",
+		Duration:    5,
+		Timeout:     time.Minute,
+	}
+
+	client := higgsfield.NewClient(cfg.APIKey, srv.Client()).WithBaseURL(srv.URL)
+	outputs, err := gha.NewOutputWriterFromEnv()
+	if err != nil {
+		t.Fatalf("NewOutputWriterFromEnv: %v", err)
+	}
+
+	if err := execute(context.Background(), cfg, client, outputs); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	got, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("ReadFile output: %v", err)
+	}
+	if string(got) != string(videoBody) {
+		t.Fatalf("output file = %q", got)
+	}
+
+	raw, err := os.ReadFile(outputsPath)
+	if err != nil {
+		t.Fatalf("ReadFile outputs: %v", err)
+	}
+	content := string(raw)
+	if !strings.Contains(content, "request-id=req-v\n") {
+		t.Fatalf("outputs = %q", content)
+	}
+	if !strings.Contains(content, "video-url="+srv.URL+"/out.mp4\n") {
+		t.Fatalf("outputs = %q", content)
+	}
+	if strings.Contains(content, "image-url=") {
+		t.Fatalf("video run set image-url: %q", content)
+	}
+	if !strings.Contains(content, "output-path=out.mp4\n") {
+		t.Fatalf("outputs = %q", content)
+	}
 }
 
 func TestExecute_preflightSkipsAPI(t *testing.T) {

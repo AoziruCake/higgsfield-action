@@ -1,5 +1,5 @@
 name: Higgsfield Generate
-description: Generate Soul v2 images with the Higgsfield API (submit, poll, download)
+description: Generate Soul v2 images or Seedance 2.5 text-to-video with the Higgsfield API (submit, poll, download)
 author: AoziruCake
 branding:
   icon: image
@@ -10,25 +10,27 @@ inputs:
     description: Higgsfield API credentials in KEY_ID:KEY_SECRET format
     required: true
   prompt:
-    description: Text prompt for image generation
+    description: Text prompt for image or video generation
     required: true
   output:
-    description: Path where the generated image will be saved (relative to the workspace)
+    description: Path where the generated file will be saved (relative to the workspace)
     required: true
   model:
-    description: Higgsfield model endpoint path
+    description: "Higgsfield model endpoint path. Image default is Soul v2. Video is bytedance/seedance-2.5/text-to-video."
     required: false
     default: higgsfield-ai/soul/v2/standard
   aspect-ratio:
-    description: "Aspect ratio for Soul v2 (e.g. 4:3, 16:9, 1:1)"
+    description: "Aspect ratio. Soul v2 defaults to 4:3. Seedance 2.5 text-to-video defaults to 16:9 (16:9, 4:3, 1:1, 3:4, 9:16, 21:9)."
     required: false
-    default: "4:3"
   resolution:
-    description: "Output resolution for Soul v2 (720p or 1080p)"
+    description: "Soul v2 accepts 720p or 1080p. Seedance 2.5 text-to-video also accepts 480p."
     required: false
     default: 720p
+  duration:
+    description: "Video length in seconds for Seedance 2.5 text-to-video (4-30). Defaults to 5. Not accepted for image models."
+    required: false
   timeout:
-    description: Maximum time to wait for generation (Go duration, e.g. 10m)
+    description: Maximum time to wait for generation (Go duration, e.g. 10m). Use 20m or more for video.
     required: false
     default: 10m
 
@@ -37,8 +39,10 @@ outputs:
     description: Higgsfield request ID for the generation job
   image-url:
     description: CDN URL of the generated image
+  video-url:
+    description: CDN URL of the generated video
   output-path:
-    description: Workspace-relative path of the saved image (usable by later job steps on the runner)
+    description: Workspace-relative path of the saved file (usable by later job steps on the runner)
 
 runs:
   using: docker
