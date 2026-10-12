@@ -28,12 +28,13 @@ type Config struct {
 	AspectRatio string
 	Resolution  string
 	Duration    int // seconds; video only. Zero means unset for image models.
+	durationSet bool
 	Timeout     time.Duration
 }
 
 // IsVideo reports whether this config targets Seedance 2.5 text-to-video.
 func (c Config) IsVideo() bool {
-	return isVideoModel(c.Model)
+	return kindOf(c.Model) == kindSeedanceVideo
 }
 
 // FromEnv reads Action inputs from INPUT_* environment variables.
@@ -42,13 +43,16 @@ func FromEnv() (Config, error) {
 		APIKey:      actionInput("api-key"),
 		Prompt:      actionInput("prompt"),
 		Output:      actionInput("output"),
-		Model:       normalizeModel(actionInput("model")),
+		Model:       actionInput("model"),
 		AspectRatio: actionInput("aspect-ratio"),
 		Resolution:  actionInput("resolution"),
 		Timeout:     10 * time.Minute,
 	}
 	if cfg.Model == "" {
 		cfg.Model = DefaultModel
+	}
+	if cfg.Resolution == "" {
+		cfg.Resolution = "720p"
 	}
 
 	rawDuration := actionInput("duration")
@@ -58,28 +62,18 @@ func FromEnv() (Config, error) {
 			return Config{}, fmt.Errorf("invalid duration %q: %w", rawDuration, err)
 		}
 		cfg.Duration = n
+		cfg.durationSet = true
 	}
 
 	if cfg.IsVideo() {
 		if cfg.AspectRatio == "" {
 			cfg.AspectRatio = "16:9"
 		}
-		if cfg.Resolution == "" {
-			cfg.Resolution = "720p"
-		}
-		if rawDuration == "" {
+		if !cfg.durationSet {
 			cfg.Duration = 5
 		}
-	} else {
-		if rawDuration != "" {
-			return Config{}, fmt.Errorf("duration is only supported for %s", VideoModel)
-		}
-		if cfg.AspectRatio == "" {
-			cfg.AspectRatio = "4:3"
-		}
-		if cfg.Resolution == "" {
-			cfg.Resolution = "720p"
-		}
+	} else if cfg.AspectRatio == "" {
+		cfg.AspectRatio = "4:3"
 	}
 
 	if raw := actionInput("timeout"); raw != "" {
@@ -113,13 +107,13 @@ func (c Config) Validate() error {
 	if c.Model == "" {
 		return fmt.Errorf("model is required")
 	}
-	if isUnsupportedVideoModel(c.Model) {
-		return fmt.Errorf("unsupported video model %q; only %s is supported", normalizeModel(c.Model), VideoModel)
+	if kindOf(c.Model) == kindUnsupportedVideo {
+		return fmt.Errorf("unsupported video model %q; only %s is supported", c.Model, VideoModel)
 	}
 	if c.IsVideo() {
 		return validateVideo(c)
 	}
-	if c.Duration != 0 {
+	if c.durationSet || c.Duration != 0 {
 		return fmt.Errorf("duration is only supported for %s", VideoModel)
 	}
 	switch c.Resolution {
@@ -147,20 +141,37 @@ func validateVideo(c Config) error {
 	return nil
 }
 
-func isVideoModel(model string) bool {
-	return normalizeModel(model) == VideoModel
+type modelKind int
+
+const (
+	kindImage modelKind = iota
+	kindSeedanceVideo
+	kindUnsupportedVideo
+)
+
+// videoWorkflows are path endings for video endpoints this Action does not call.
+// Seedance 2.5 text-to-video is matched by its full path before this list.
+var videoWorkflows = map[string]struct{}{
+	"text-to-video":  {},
+	"image-to-video": {},
 }
 
-func isUnsupportedVideoModel(model string) bool {
-	model = normalizeModel(model)
-	if model == "" || isVideoModel(model) {
-		return false
+func kindOf(model string) modelKind {
+	switch model {
+	case VideoModel:
+		return kindSeedanceVideo
 	}
-	return strings.Contains(model, "text-to-video") || strings.Contains(model, "image-to-video")
+	if _, ok := videoWorkflows[workflowName(model)]; ok {
+		return kindUnsupportedVideo
+	}
+	return kindImage
 }
 
-func normalizeModel(model string) string {
-	return strings.Trim(strings.TrimSpace(model), "/")
+func workflowName(model string) string {
+	if i := strings.LastIndex(model, "/"); i >= 0 {
+		return model[i+1:]
+	}
+	return model
 }
 
 // actionInput reads an Action input from the environment.

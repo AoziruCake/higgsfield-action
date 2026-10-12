@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -119,7 +120,7 @@ func TestFromEnv_videoExplicitValues(t *testing.T) {
 	t.Setenv("INPUT_API_KEY", "key-id:secret")
 	t.Setenv("INPUT_PROMPT", "A cat")
 	t.Setenv("INPUT_OUTPUT", "out.mp4")
-	t.Setenv("INPUT_MODEL", "/"+VideoModel+"/")
+	t.Setenv("INPUT_MODEL", VideoModel)
 	t.Setenv("INPUT_ASPECT_RATIO", "9:16")
 	t.Setenv("INPUT_RESOLUTION", "480p")
 	t.Setenv("INPUT_DURATION", "12")
@@ -180,14 +181,18 @@ func TestFromEnv_videoRejectsResolution(t *testing.T) {
 }
 
 func TestFromEnv_imageRejectsDuration(t *testing.T) {
-	t.Setenv("INPUT_API_KEY", "a:b")
-	t.Setenv("INPUT_PROMPT", "x")
-	t.Setenv("INPUT_OUTPUT", "out.png")
-	t.Setenv("INPUT_DURATION", "5")
+	for _, duration := range []string{"5", "0"} {
+		t.Run(duration, func(t *testing.T) {
+			t.Setenv("INPUT_API_KEY", "a:b")
+			t.Setenv("INPUT_PROMPT", "x")
+			t.Setenv("INPUT_OUTPUT", "out.png")
+			t.Setenv("INPUT_DURATION", duration)
 
-	_, err := FromEnv()
-	if err == nil {
-		t.Fatal("expected error for duration on image model")
+			_, err := FromEnv()
+			if err == nil {
+				t.Fatal("expected error for duration on image model")
+			}
+		})
 	}
 }
 
@@ -204,13 +209,21 @@ func TestFromEnv_imageRejects480p(t *testing.T) {
 }
 
 func TestFromEnv_unsupportedVideoModel(t *testing.T) {
-	t.Setenv("INPUT_API_KEY", "a:b")
-	t.Setenv("INPUT_PROMPT", "x")
-	t.Setenv("INPUT_OUTPUT", "out.mp4")
-	t.Setenv("INPUT_MODEL", "bytedance/seedance-2.5/image-to-video")
+	for _, model := range []string{
+		"bytedance/seedance-2.5/image-to-video",
+		"alibaba/wan-3.0/text-to-video",
+	} {
+		t.Run(model, func(t *testing.T) {
+			t.Setenv("INPUT_API_KEY", "a:b")
+			t.Setenv("INPUT_PROMPT", "x")
+			t.Setenv("INPUT_OUTPUT", "out.mp4")
+			t.Setenv("INPUT_MODEL", model)
+			t.Setenv("INPUT_DURATION", "5")
 
-	_, err := FromEnv()
-	if err == nil {
-		t.Fatal("expected error for unsupported video model")
+			_, err := FromEnv()
+			if err == nil || !strings.Contains(err.Error(), "unsupported video model") {
+				t.Fatalf("err = %v", err)
+			}
+		})
 	}
 }

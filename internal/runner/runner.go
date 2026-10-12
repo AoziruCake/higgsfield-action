@@ -4,7 +4,6 @@ package runner
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -20,7 +19,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	return execute(ctx, cfg, higgsfield.NewClient(cfg.APIKey, &http.Client{}), outputs)
+	// nil selects NewClient's 60s timeout for status calls. Download uses the
+	// Action context instead of that timeout.
+	return execute(ctx, cfg, higgsfield.NewClient(cfg.APIKey, nil), outputs)
 }
 
 func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, outputs *gha.OutputWriter) error {
@@ -37,44 +38,72 @@ func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, 
 		return err
 	}
 
-	submitted, status, err := generate(ctx, cfg, client)
+	job := mediaJobFor(cfg)
+	submitted, status, err := generate(ctx, client, job)
 	if err != nil {
 		return err
 	}
 
-	mediaURL, outputName, err := completedMedia(cfg, status)
+	mediaURL, err := job.completedURL(status)
 	if err != nil {
 		return err
 	}
 
-	if err := saveMedia(ctx, client, dest.abs, mediaURL, mediaKind(cfg)); err != nil {
+	if err := saveMedia(ctx, client, dest.abs, mediaURL, job.kind); err != nil {
 		return err
 	}
 
-	return writeOutputs(outputs, submitted, status, outputName, mediaURL, dest.rel)
+	return writeOutputs(outputs, submitted, status, job.outputKey, mediaURL, dest.rel)
 }
 
-func completedMedia(cfg config.Config, status higgsfield.RequestStatus) (url, outputName string, err error) {
+// mediaJob is the image or video submit/read pair for one model.
+type mediaJob struct {
+	outputKey string
+	kind      string
+	submit    func(context.Context, *higgsfield.Client) (higgsfield.SubmitResponse, error)
+	urlFrom   func(higgsfield.RequestStatus) (string, bool)
+}
+
+func mediaJobFor(cfg config.Config) mediaJob {
 	if cfg.IsVideo() {
-		videoURL, ok := status.VideoURL()
-		if !ok {
-			return "", "", fmt.Errorf("generation completed but no video URL in response (request_id=%s)", status.RequestID)
+		return mediaJob{
+			outputKey: "video-url",
+			kind:      "video",
+			submit: func(ctx context.Context, client *higgsfield.Client) (higgsfield.SubmitResponse, error) {
+				return client.SubmitVideo(ctx, cfg.Model, higgsfield.VideoRequest{
+					Prompt:      cfg.Prompt,
+					Duration:    cfg.Duration,
+					Resolution:  cfg.Resolution,
+					AspectRatio: cfg.AspectRatio,
+				})
+			},
+			urlFrom: func(status higgsfield.RequestStatus) (string, bool) {
+				return status.VideoURL()
+			},
 		}
-		return videoURL, "video-url", nil
 	}
-
-	imageURL, ok := status.FirstImageURL()
-	if !ok {
-		return "", "", fmt.Errorf("generation completed but no image URL in response (request_id=%s)", status.RequestID)
+	return mediaJob{
+		outputKey: "image-url",
+		kind:      "image",
+		submit: func(ctx context.Context, client *higgsfield.Client) (higgsfield.SubmitResponse, error) {
+			return client.SubmitImage(ctx, cfg.Model, higgsfield.ImageRequest{
+				Prompt:      cfg.Prompt,
+				AspectRatio: cfg.AspectRatio,
+				Resolution:  cfg.Resolution,
+			})
+		},
+		urlFrom: func(status higgsfield.RequestStatus) (string, bool) {
+			return status.FirstImageURL()
+		},
 	}
-	return imageURL, "image-url", nil
 }
 
-func mediaKind(cfg config.Config) string {
-	if cfg.IsVideo() {
-		return "video"
+func (j mediaJob) completedURL(status higgsfield.RequestStatus) (string, error) {
+	url, ok := j.urlFrom(status)
+	if !ok {
+		return "", fmt.Errorf("generation completed but no %s URL in response (request_id=%s)", j.kind, status.RequestID)
 	}
-	return "image"
+	return url, nil
 }
 
 type outputDest struct {
@@ -114,8 +143,8 @@ func probeWritableDir(dir string) error {
 	return os.Remove(name)
 }
 
-func generate(ctx context.Context, cfg config.Config, client *higgsfield.Client) (higgsfield.SubmitResponse, higgsfield.RequestStatus, error) {
-	submitted, err := submit(ctx, cfg, client)
+func generate(ctx context.Context, client *higgsfield.Client, job mediaJob) (higgsfield.SubmitResponse, higgsfield.RequestStatus, error) {
+	submitted, err := job.submit(ctx, client)
 	if err != nil {
 		return submitted, higgsfield.RequestStatus{}, err
 	}
@@ -126,22 +155,6 @@ func generate(ctx context.Context, cfg config.Config, client *higgsfield.Client)
 		return submitted, status, fmt.Errorf("wait for completion: %w", err)
 	}
 	return submitted, status, nil
-}
-
-func submit(ctx context.Context, cfg config.Config, client *higgsfield.Client) (higgsfield.SubmitResponse, error) {
-	if cfg.IsVideo() {
-		return client.SubmitVideo(ctx, cfg.Model, higgsfield.VideoRequest{
-			Prompt:      cfg.Prompt,
-			Duration:    cfg.Duration,
-			Resolution:  cfg.Resolution,
-			AspectRatio: cfg.AspectRatio,
-		})
-	}
-	return client.SubmitImage(ctx, cfg.Model, higgsfield.ImageRequest{
-		Prompt:      cfg.Prompt,
-		AspectRatio: cfg.AspectRatio,
-		Resolution:  cfg.Resolution,
-	})
 }
 
 func saveMedia(ctx context.Context, client *higgsfield.Client, outputPath, mediaURL, kind string) error {
@@ -157,7 +170,7 @@ func saveMedia(ctx context.Context, client *higgsfield.Client, outputPath, media
 	return nil
 }
 
-func writeOutputs(outputs *gha.OutputWriter, submitted higgsfield.SubmitResponse, status higgsfield.RequestStatus, mediaOutputName, mediaURL, outputPath string) error {
+func writeOutputs(outputs *gha.OutputWriter, submitted higgsfield.SubmitResponse, status higgsfield.RequestStatus, outputKey, mediaURL, outputPath string) error {
 	requestID := status.RequestID
 	if requestID == "" {
 		requestID = submitted.RequestID
@@ -166,8 +179,8 @@ func writeOutputs(outputs *gha.OutputWriter, submitted higgsfield.SubmitResponse
 	if err := outputs.Set("request-id", requestID); err != nil {
 		return fmt.Errorf("set output request-id: %w", err)
 	}
-	if err := outputs.Set(mediaOutputName, mediaURL); err != nil {
-		return fmt.Errorf("set output %s: %w", mediaOutputName, err)
+	if err := outputs.Set(outputKey, mediaURL); err != nil {
+		return fmt.Errorf("set output %s: %w", outputKey, err)
 	}
 	if err := outputs.Set("output-path", outputPath); err != nil {
 		return fmt.Errorf("set output output-path: %w", err)
