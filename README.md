@@ -76,7 +76,7 @@ docker build -t higgsfield-action .
 
 1. Add secret `HIGGSFIELD_API_KEY` to the repository.
 2. Run **Actions → Integration → Run workflow** ([integration.yml](.github/workflows/integration.yml)).
-3. Download the `higgsfield-image` artifact from the completed run.
+3. Download the artifact from the completed run. Image runs upload `higgsfield-image`. Video runs upload `higgsfield-video`.
 
 The workflow dispatch form accepts `model` and `duration`. Leave them at the defaults for an image. For a video run, set `model` to `bytedance/seedance-2.5/text-to-video` and `output` to a path such as `output/integration.mp4`. `duration` can stay empty (the Action uses 5 seconds).
 

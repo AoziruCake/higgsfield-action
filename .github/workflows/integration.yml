@@ -62,8 +62,8 @@ jobs:
           echo "video-url=${{ steps.higgsfield.outputs.video-url }}"
           echo "output-path=${{ steps.higgsfield.outputs.output-path }}"
 
-      - name: Upload image artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:
-          name: higgsfield-image
+          name: ${{ steps.higgsfield.outputs.video-url && 'higgsfield-video' || 'higgsfield-image' }}
           path: ${{ inputs.output }}
