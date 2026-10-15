@@ -23,7 +23,7 @@ func TestDownload_success(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := higgsfield.NewClient(testAPIKey, srv.Client())
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	var buf bytes.Buffer
 	if err := client.Download(context.Background(), srv.URL+"/image.png", &buf); err != nil {
 		t.Fatalf("Download: %v", err)
@@ -44,7 +44,7 @@ func TestDownload_ignoresClientTimeout(t *testing.T) {
 
 	hc := srv.Client()
 	hc.Timeout = time.Nanosecond
-	client := higgsfield.NewClient(testAPIKey, hc)
+	client := higgsfield.NewClient(testAPIKey, hc).WithBaseURL(srv.URL)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -66,7 +66,7 @@ func TestDownload_httpError(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := higgsfield.NewClient(testAPIKey, srv.Client())
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	err := client.Download(context.Background(), srv.URL+"/missing", ioDiscard{})
 	if err == nil {
 		t.Fatal("expected error")

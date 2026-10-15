@@ -38,8 +38,11 @@ func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, 
 		return err
 	}
 
-	job := mediaJobFor(cfg)
-	submitted, status, err := generate(ctx, client, job)
+	job, err := mediaJobFor(cfg)
+	if err != nil {
+		return err
+	}
+	submitted, status, err := generate(ctx, client, cfg, job)
 	if err != nil {
 		return err
 	}
@@ -49,59 +52,81 @@ func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, 
 		return err
 	}
 
-	if err := saveMedia(ctx, client, dest.abs, mediaURL, job.kind); err != nil {
+	if err := saveMedia(ctx, client, dest.abs, mediaURL, job.noun); err != nil {
 		return err
 	}
 
 	return writeOutputs(outputs, submitted, status, job.outputKey, mediaURL, dest.rel)
 }
 
-// mediaJob is the image or video submit/read pair for one model.
+// mediaJob is the submit/read pair for one supported model.
+// Output key and noun come from config.Media, so this package does not
+// restate which model is an image or a video.
 type mediaJob struct {
 	outputKey string
-	kind      string
-	submit    func(context.Context, *higgsfield.Client) (higgsfield.SubmitResponse, error)
+	noun      string
+	submit    func(context.Context, *higgsfield.Client, config.Config) (higgsfield.SubmitResponse, error)
 	urlFrom   func(higgsfield.RequestStatus) (string, bool)
 }
 
-func mediaJobFor(cfg config.Config) mediaJob {
-	if cfg.IsVideo() {
-		return mediaJob{
-			outputKey: "video-url",
-			kind:      "video",
-			submit: func(ctx context.Context, client *higgsfield.Client) (higgsfield.SubmitResponse, error) {
-				return client.SubmitVideo(ctx, cfg.Model, higgsfield.VideoRequest{
-					Prompt:      cfg.Prompt,
-					Duration:    cfg.Duration,
-					Resolution:  cfg.Resolution,
-					AspectRatio: cfg.AspectRatio,
-				})
-			},
-			urlFrom: func(status higgsfield.RequestStatus) (string, bool) {
-				return status.VideoURL()
-			},
-		}
+type jobStyle struct {
+	submit  func(context.Context, *higgsfield.Client, config.Config) (higgsfield.SubmitResponse, error)
+	urlFrom func(higgsfield.RequestStatus) (string, bool)
+}
+
+// jobStyles is the only place that picks a request body and a result URL.
+// Keys are config.Kind, the same distinction config uses for defaults and validation.
+var jobStyles = map[config.Kind]jobStyle{
+	config.KindImage: {
+		submit:  submitImage,
+		urlFrom: higgsfield.RequestStatus.FirstImageURL,
+	},
+	config.KindVideo: {
+		submit:  submitVideo,
+		urlFrom: higgsfield.RequestStatus.VideoURL,
+	},
+}
+
+func mediaJobFor(cfg config.Config) (mediaJob, error) {
+	media, err := cfg.Media()
+	if err != nil {
+		return mediaJob{}, err
+	}
+	style, ok := jobStyles[media.Kind]
+	if !ok {
+		return mediaJob{}, fmt.Errorf("unsupported model %q", cfg.Model)
 	}
 	return mediaJob{
-		outputKey: "image-url",
-		kind:      "image",
-		submit: func(ctx context.Context, client *higgsfield.Client) (higgsfield.SubmitResponse, error) {
-			return client.SubmitImage(ctx, cfg.Model, higgsfield.ImageRequest{
-				Prompt:      cfg.Prompt,
-				AspectRatio: cfg.AspectRatio,
-				Resolution:  cfg.Resolution,
-			})
-		},
-		urlFrom: func(status higgsfield.RequestStatus) (string, bool) {
-			return status.FirstImageURL()
-		},
+		outputKey: media.OutputKey,
+		noun:      media.Noun,
+		submit:    style.submit,
+		urlFrom:   style.urlFrom,
+	}, nil
+}
+
+func submitImage(ctx context.Context, client *higgsfield.Client, cfg config.Config) (higgsfield.SubmitResponse, error) {
+	return client.SubmitImage(ctx, cfg.Model, higgsfield.ImageRequest{PromptFields: promptFields(cfg)})
+}
+
+func submitVideo(ctx context.Context, client *higgsfield.Client, cfg config.Config) (higgsfield.SubmitResponse, error) {
+	return client.SubmitVideo(ctx, cfg.Model, higgsfield.VideoRequest{
+		PromptFields: promptFields(cfg),
+		Duration:     cfg.Duration.Seconds(),
+	})
+}
+
+func promptFields(cfg config.Config) higgsfield.PromptFields {
+	return higgsfield.PromptFields{
+		Prompt:      cfg.Prompt,
+		AspectRatio: cfg.AspectRatio,
+		Resolution:  cfg.Resolution,
 	}
 }
 
 func (j mediaJob) completedURL(status higgsfield.RequestStatus) (string, error) {
 	url, ok := j.urlFrom(status)
 	if !ok {
-		return "", fmt.Errorf("generation completed but no %s URL in response (request_id=%s)", j.kind, status.RequestID)
+		return "", fmt.Errorf("generation completed but no %s URL in response (request_id=%s)", j.noun, status.RequestID)
 	}
 	return url, nil
 }
@@ -121,30 +146,17 @@ func prepareOutput(output string) (outputDest, error) {
 		return outputDest{}, fmt.Errorf("resolve output path: %w", err)
 	}
 	dir := filepath.Dir(abs)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := workspace.MkdirWithin(dir); err != nil {
 		return outputDest{}, fmt.Errorf("create output directory: %w", err)
 	}
-	if err := probeWritableDir(dir); err != nil {
+	if err := workspace.ProbeWritable(dir); err != nil {
 		return outputDest{}, fmt.Errorf("output path is not writable: %w", err)
 	}
 	return outputDest{abs: abs, rel: rel}, nil
 }
 
-func probeWritableDir(dir string) error {
-	file, err := os.CreateTemp(dir, ".higgsfield-action-write-*")
-	if err != nil {
-		return err
-	}
-	name := file.Name()
-	if err := file.Close(); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	return os.Remove(name)
-}
-
-func generate(ctx context.Context, client *higgsfield.Client, job mediaJob) (higgsfield.SubmitResponse, higgsfield.RequestStatus, error) {
-	submitted, err := job.submit(ctx, client)
+func generate(ctx context.Context, client *higgsfield.Client, cfg config.Config, job mediaJob) (higgsfield.SubmitResponse, higgsfield.RequestStatus, error) {
+	submitted, err := job.submit(ctx, client, cfg)
 	if err != nil {
 		return submitted, higgsfield.RequestStatus{}, err
 	}
@@ -157,15 +169,17 @@ func generate(ctx context.Context, client *higgsfield.Client, job mediaJob) (hig
 	return submitted, status, nil
 }
 
-func saveMedia(ctx context.Context, client *higgsfield.Client, outputPath, mediaURL, kind string) error {
-	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+func saveMedia(ctx context.Context, client *higgsfield.Client, outputPath, mediaURL, noun string) error {
+	file, err := createOutput(outputPath)
 	if err != nil {
 		return fmt.Errorf("create output file: %w", err)
 	}
 	defer file.Close()
 
 	if err := client.Download(ctx, mediaURL, file); err != nil {
-		return fmt.Errorf("download %s: %w", kind, err)
+		_ = file.Close()
+		_ = os.Remove(outputPath)
+		return fmt.Errorf("download %s: %w", noun, err)
 	}
 	return nil
 }

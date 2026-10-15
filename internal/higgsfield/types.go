@@ -44,20 +44,23 @@ func (s Status) FailureMessage(detail *string) string {
 	}
 }
 
-// ImageRequest is the JSON body for Soul-style text-to-image endpoints.
-type ImageRequest struct {
+// PromptFields is the prompt and frame shared by image and video request bodies.
+type PromptFields struct {
 	Prompt      string `json:"prompt"`
 	AspectRatio string `json:"aspect_ratio"`
 	Resolution  string `json:"resolution"`
 }
 
+// ImageRequest is the JSON body for Soul-style text-to-image endpoints.
+type ImageRequest struct {
+	PromptFields
+}
+
 // VideoRequest is the JSON body for Seedance 2.5 text-to-video.
 // Only these fields are sent: the endpoint rejects unknown properties.
 type VideoRequest struct {
-	Prompt      string `json:"prompt"`
-	Duration    int    `json:"duration"`
-	Resolution  string `json:"resolution"`
-	AspectRatio string `json:"aspect_ratio"`
+	PromptFields
+	Duration int `json:"duration"`
 }
 
 // SubmitResponse is returned immediately after a successful submission.

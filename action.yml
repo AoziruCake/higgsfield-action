@@ -16,7 +16,7 @@ inputs:
     description: Path where the generated file will be saved (relative to the workspace)
     required: true
   model:
-    description: "Higgsfield model endpoint path. Image default is Soul v2. Video is bytedance/seedance-2.5/text-to-video."
+    description: "Supported paths: higgsfield-ai/soul/v2/standard (default) or bytedance/seedance-2.5/text-to-video."
     required: false
     default: higgsfield-ai/soul/v2/standard
   aspect-ratio:

@@ -11,11 +11,15 @@ import (
 // ResolveOutputPath maps an Action output path to an absolute filesystem path.
 //
 // Relative paths are resolved from GITHUB_WORKSPACE (or the process cwd locally).
-// Paths that escape the workspace with ".." are rejected.
+// The result must be a file path inside the workspace. ".." and any symlink
+// along the path are rejected, so a link cannot redirect the write outside.
 func ResolveOutputPath(output string) (string, error) {
 	output = strings.TrimSpace(output)
 	if output == "" {
 		return "", fmt.Errorf("output is required")
+	}
+	if strings.ContainsRune(output, 0) {
+		return "", fmt.Errorf("output path is invalid")
 	}
 
 	root, err := workspaceRoot()
@@ -30,7 +34,7 @@ func ResolveOutputPath(output string) (string, error) {
 		abs = filepath.Clean(filepath.Join(root, output))
 	}
 
-	if err := ensureWithinRoot(root, abs); err != nil {
+	if err := confine(root, abs, false); err != nil {
 		return "", err
 	}
 	return abs, nil
@@ -43,7 +47,7 @@ func Rel(abs string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := ensureWithinRoot(root, abs); err != nil {
+	if err := confine(root, abs, false); err != nil {
 		return "", err
 	}
 	rel, err := filepath.Rel(root, abs)
@@ -51,6 +55,18 @@ func Rel(abs string) (string, error) {
 		return "", fmt.Errorf("output path: %w", err)
 	}
 	return filepath.ToSlash(rel), nil
+}
+
+// MkdirWithin creates dir and its parents inside the workspace.
+// It refuses to follow a symlink, so a link cannot create directories outside.
+func MkdirWithin(dir string) error {
+	root, err := workspaceRoot()
+	if err != nil {
+		return err
+	}
+	return walkComponents(root, filepath.Clean(dir), true, func(current string) error {
+		return os.Mkdir(current, 0o755)
+	}, true)
 }
 
 func workspaceRoot() (string, error) {
@@ -65,12 +81,98 @@ func workspaceRoot() (string, error) {
 	return filepath.Clean(root), nil
 }
 
-func ensureWithinRoot(root, abs string) error {
+// ProbeWritable reports whether dir accepts a new file.
+// It creates a temporary file and removes it, so a failed generation does not
+// leave a zero-byte output behind.
+func ProbeWritable(dir string) error {
+	file, err := os.CreateTemp(dir, ".higgsfield-action-write-*")
+	if err != nil {
+		return err
+	}
+	name := file.Name()
+	if err := file.Close(); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	return os.Remove(name)
+}
+
+// confine checks that abs is lexically inside root and that no existing
+// component is a symlink. allowRoot permits abs to be root itself, which
+// directory creation needs and file outputs do not.
+func confine(root, abs string, allowRoot bool) error {
+	return walkComponents(root, abs, allowRoot, nil, false)
+}
+
+// walkComponents applies one path walk to both checks and directory creation.
+// onMissing is nil when a missing component ends the walk. requireDir rejects
+// an existing file where a directory is required.
+func walkComponents(root, abs string, allowRoot bool, onMissing func(current string) error, requireDir bool) error {
+	if err := lexicalInside(root, abs, allowRoot); err != nil {
+		return err
+	}
 	rel, err := filepath.Rel(root, abs)
 	if err != nil {
 		return fmt.Errorf("output path: %w", err)
 	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if rel == "." {
+		return nil
+	}
+
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("resolve workspace: %w", err)
+	}
+	resolvedRoot = filepath.Clean(resolvedRoot)
+
+	current := root
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		if part == "" || part == "." {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, statErr := os.Lstat(current)
+		if statErr != nil {
+			if os.IsNotExist(statErr) {
+				if onMissing == nil {
+					return nil
+				}
+				if err := onMissing(current); err != nil {
+					return err
+				}
+				continue
+			}
+			return fmt.Errorf("output path: %w", statErr)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("output path must not contain a symlink")
+		}
+		if requireDir && !info.IsDir() {
+			return fmt.Errorf("create output directory: not a directory")
+		}
+		resolved, err := filepath.EvalSymlinks(current)
+		if err != nil {
+			return fmt.Errorf("output path: %w", err)
+		}
+		if err := lexicalInside(resolvedRoot, resolved, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func lexicalInside(root, abs string, allowRoot bool) error {
+	rel, err := filepath.Rel(root, filepath.Clean(abs))
+	if err != nil {
+		return fmt.Errorf("output path: %w", err)
+	}
+	if rel == "." {
+		if allowRoot {
+			return nil
+		}
+		return fmt.Errorf("output path must be a file inside the workspace")
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return fmt.Errorf("output path must be inside the workspace")
 	}
 	return nil

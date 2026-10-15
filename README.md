@@ -21,7 +21,7 @@ Support is via [GitHub Issues](https://github.com/AoziruCake/higgsfield-action/i
     output: output.png
 ```
 
-Text-to-video uses [Seedance 2.5](https://docs.higgsfield.ai/docs/models/seedance-2-5/text-to-video). Other video endpoints are rejected before submission.
+Text-to-video uses [Seedance 2.5](https://docs.higgsfield.ai/docs/models/seedance-2-5/text-to-video). Only that video endpoint and Soul v2 Standard are accepted.
 
 ```yaml
 - name: Generate video
@@ -49,7 +49,7 @@ Create a repository secret `HIGGSFIELD_API_KEY` with your credentials in **`KEY_
 | `api-key` | yes | — | `KEY_ID:KEY_SECRET` |
 | `prompt` | yes | — | Text prompt |
 | `output` | yes | — | Output file path (workspace-relative) |
-| `model` | no | `higgsfield-ai/soul/v2/standard` | Model endpoint path. Video: `bytedance/seedance-2.5/text-to-video` |
+| `model` | no | `higgsfield-ai/soul/v2/standard` | `higgsfield-ai/soul/v2/standard` or `bytedance/seedance-2.5/text-to-video` |
 | `aspect-ratio` | no | `4:3` for images, `16:9` for Seedance 2.5 | Soul v2 accepts its usual ratios. Seedance 2.5 accepts `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9` |
 | `resolution` | no | `720p` | Images: `720p` or `1080p`. Seedance 2.5 also accepts `480p` |
 | `duration` | no | `5` for Seedance 2.5 | Seconds, `4`–`30`. Video only |
@@ -86,7 +86,7 @@ The workflow dispatch form accepts `model` and `duration`. Leave them at the def
 |-------|------------|
 | `api-key is required` | The Action now reads Docker's `INPUT_API-KEY`. Update to a commit that includes that fix and rerun. |
 | `not enough credits` / HTTP 403 | The API key is valid, but the Higgsfield account has no remaining credits. Add credits in [Higgsfield Cloud](https://console.higgsfield.ai) and rerun. |
-| `create output directory: ... permission denied` | The Action container must run as root so it can write to `GITHUB_WORKSPACE`. Update to a commit that drops Distroless `:nonroot` and rerun. |
+| `create output directory: ... permission denied` | The container runs as uid 1001, the user that owns `GITHUB_WORKSPACE`. Update to a commit that sets `USER 1001` and rerun. |
 | Later step cannot find `output-path` | `output-path` is workspace-relative (not `/github/workspace/...`). Use `$GITHUB_WORKSPACE/${{ steps.higgsfield.outputs.output-path }}` or the `output` input. |
 
 ## Releasing

@@ -8,7 +8,7 @@ import (
 )
 
 // GitHub Actions mounts GITHUB_WORKSPACE as the runner user (uid 1001, mode 0755).
-// Distroless :nonroot is uid 65532 and cannot create output directories there.
+// The image must run as that uid. Distroless :nonroot is 65532 and cannot write there.
 func TestDockerfileRunsAsWorkspaceWritableUser(t *testing.T) {
 	t.Parallel()
 
@@ -18,12 +18,16 @@ func TestDockerfileRunsAsWorkspaceWritableUser(t *testing.T) {
 	}
 	defer file.Close()
 
-	var runtimeFrom string
+	var runtimeFrom, user string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, "FROM ") {
 			runtimeFrom = line
+			user = ""
+		}
+		if strings.HasPrefix(line, "USER ") {
+			user = strings.TrimSpace(strings.TrimPrefix(line, "USER "))
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -34,5 +38,8 @@ func TestDockerfileRunsAsWorkspaceWritableUser(t *testing.T) {
 	}
 	if strings.Contains(runtimeFrom, "nonroot") {
 		t.Fatalf("runtime %s cannot mkdir in GITHUB_WORKSPACE (permission denied)", runtimeFrom)
+	}
+	if user != "1001" {
+		t.Fatalf("USER = %q, want 1001", user)
 	}
 }
