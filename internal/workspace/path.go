@@ -65,6 +65,22 @@ func workspaceRoot() (string, error) {
 	return filepath.Clean(root), nil
 }
 
+// ProbeWritable reports whether dir accepts a new file.
+// It creates a temporary file and removes it, so a failed generation does not
+// leave a zero-byte output behind.
+func ProbeWritable(dir string) error {
+	file, err := os.CreateTemp(dir, ".higgsfield-action-write-*")
+	if err != nil {
+		return err
+	}
+	name := file.Name()
+	if err := file.Close(); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	return os.Remove(name)
+}
+
 func ensureWithinRoot(root, abs string) error {
 	rel, err := filepath.Rel(root, abs)
 	if err != nil {

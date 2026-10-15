@@ -39,9 +39,11 @@ func TestSubmitImage_success(t *testing.T) {
 
 	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	resp, err := client.SubmitImage(context.Background(), "higgsfield-ai/soul/v2/standard", higgsfield.ImageRequest{
-		Prompt:      "A cat",
-		AspectRatio: "4:3",
-		Resolution:  "720p",
+		PromptFields: higgsfield.PromptFields{
+			Prompt:      "A cat",
+			AspectRatio: "4:3",
+			Resolution:  "720p",
+		},
 	})
 	if err != nil {
 		t.Fatalf("SubmitImage: %v", err)
@@ -87,10 +89,12 @@ func TestSubmitVideo_body(t *testing.T) {
 
 	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	_, err := client.SubmitVideo(context.Background(), "bytedance/seedance-2.5/text-to-video", higgsfield.VideoRequest{
-		Prompt:      "A cat",
-		Duration:    5,
-		Resolution:  "720p",
-		AspectRatio: "16:9",
+		PromptFields: higgsfield.PromptFields{
+			Prompt:      "A cat",
+			Resolution:  "720p",
+			AspectRatio: "16:9",
+		},
+		Duration: 5,
 	})
 	if err != nil {
 		t.Fatalf("SubmitVideo: %v", err)
@@ -143,7 +147,7 @@ func TestSubmitImage_missingIdentifiers(t *testing.T) {
 
 	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	_, err := client.SubmitImage(context.Background(), "higgsfield-ai/soul/v2/standard", higgsfield.ImageRequest{
-		Prompt: "x",
+		PromptFields: higgsfield.PromptFields{Prompt: "x"},
 	})
 	if err == nil {
 		t.Fatal("expected error when request_id and status_url are missing")
@@ -171,7 +175,7 @@ func TestSubmitImage_unauthorized(t *testing.T) {
 
 	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	_, err := client.SubmitImage(context.Background(), "higgsfield-ai/soul/v2/standard", higgsfield.ImageRequest{
-		Prompt: "x",
+		PromptFields: higgsfield.PromptFields{Prompt: "x"},
 	})
 	var apiErr *higgsfield.APIError
 	if !errors.As(err, &apiErr) {

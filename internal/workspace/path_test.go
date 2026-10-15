@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -43,5 +44,30 @@ func TestResolveOutputPath_rejectsTraversal(t *testing.T) {
 	_, err := ResolveOutputPath("../escape.png")
 	if err == nil {
 		t.Fatal("expected error for path traversal")
+	}
+}
+
+func TestProbeWritable_removesTempFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := ProbeWritable(dir); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("probe left %d files", len(entries))
+	}
+}
+
+func TestProbeWritable_rejectsFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ProbeWritable(file); err == nil {
+		t.Fatal("expected error probing a file")
 	}
 }
