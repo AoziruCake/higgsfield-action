@@ -42,7 +42,7 @@ func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, 
 	if err != nil {
 		return err
 	}
-	submitted, status, err := generate(ctx, client, job)
+	submitted, status, err := generate(ctx, client, cfg, job)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, 
 type mediaJob struct {
 	outputKey string
 	noun      string
-	submit    func(context.Context, *higgsfield.Client) (higgsfield.SubmitResponse, error)
+	submit    func(context.Context, *higgsfield.Client, config.Config) (higgsfield.SubmitResponse, error)
 	urlFrom   func(higgsfield.RequestStatus) (string, bool)
 }
 
@@ -99,10 +99,8 @@ func mediaJobFor(cfg config.Config) (mediaJob, error) {
 	return mediaJob{
 		outputKey: media.OutputKey,
 		noun:      media.Noun,
-		submit: func(ctx context.Context, client *higgsfield.Client) (higgsfield.SubmitResponse, error) {
-			return style.submit(ctx, client, cfg)
-		},
-		urlFrom: style.urlFrom,
+		submit:    style.submit,
+		urlFrom:   style.urlFrom,
 	}, nil
 }
 
@@ -157,8 +155,8 @@ func prepareOutput(output string) (outputDest, error) {
 	return outputDest{abs: abs, rel: rel}, nil
 }
 
-func generate(ctx context.Context, client *higgsfield.Client, job mediaJob) (higgsfield.SubmitResponse, higgsfield.RequestStatus, error) {
-	submitted, err := job.submit(ctx, client)
+func generate(ctx context.Context, client *higgsfield.Client, cfg config.Config, job mediaJob) (higgsfield.SubmitResponse, higgsfield.RequestStatus, error) {
+	submitted, err := job.submit(ctx, client, cfg)
 	if err != nil {
 		return submitted, higgsfield.RequestStatus{}, err
 	}

@@ -51,12 +51,6 @@ type Config struct {
 	Timeout     time.Duration
 }
 
-// IsVideo reports whether this config targets Seedance 2.5 text-to-video.
-func (c Config) IsVideo() bool {
-	media, err := c.Media()
-	return err == nil && media.Kind == KindVideo
-}
-
 // FromEnv reads Action inputs from INPUT_* environment variables.
 func FromEnv() (Config, error) {
 	cfg := Config{

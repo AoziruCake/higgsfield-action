@@ -48,18 +48,16 @@ jobs:
           REQUESTED_OUTPUT: ${{ inputs.output }}
         run: |
           set -euo pipefail
-          case "$OUTPUT_PATH" in
-            /*|..|../*|*/../*|*/..)
-              echo "output-path must be workspace-relative" >&2
-              exit 1
-              ;;
-          esac
-          case "$REQUESTED_OUTPUT" in
-            /*|..|../*|*/../*|*/..)
-              echo "output must be workspace-relative" >&2
-              exit 1
-              ;;
-          esac
+          reject_escape() {
+            case "$1" in
+              /*|..|../*|*/../*|*/..)
+                echo "$2" >&2
+                exit 1
+                ;;
+            esac
+          }
+          reject_escape "$OUTPUT_PATH" "output-path must be workspace-relative"
+          reject_escape "$REQUESTED_OUTPUT" "output must be workspace-relative"
           test -f "$GITHUB_WORKSPACE/$OUTPUT_PATH"
           test -f "$GITHUB_WORKSPACE/$REQUESTED_OUTPUT"
 

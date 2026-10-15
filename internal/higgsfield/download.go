@@ -67,11 +67,8 @@ func (c *Client) downloadHTTP() *http.Client {
 	return &http.Client{
 		Transport: c.httpClient.Transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
-			}
-			if req.URL == nil {
-				return fmt.Errorf("refusing redirect")
+			if err := limitedRedirect(req, via); err != nil {
+				return err
 			}
 			return c.allowMedia(req.URL)
 		},

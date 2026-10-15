@@ -102,7 +102,11 @@ func TestFromEnv_videoDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromEnv: %v", err)
 	}
-	if !cfg.IsVideo() {
+	media, err := cfg.Media()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if media.Kind != KindVideo {
 		t.Fatal("expected video config")
 	}
 	if cfg.AspectRatio != "16:9" {

@@ -27,15 +27,22 @@ func pinClient(httpClient *http.Client) *http.Client {
 }
 
 func refuseCrossOriginRedirect(req *http.Request, via []*http.Request) error {
+	if err := limitedRedirect(req, via); err != nil {
+		return err
+	}
+	prev := via[len(via)-1]
+	if prev.URL == nil || !sameOrigin(prev.URL, req.URL) {
+		return fmt.Errorf("refusing redirect to %s", req.URL.Host)
+	}
+	return nil
+}
+
+func limitedRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
 		return fmt.Errorf("stopped after 10 redirects")
 	}
 	if req.URL == nil || req.URL.User != nil {
 		return fmt.Errorf("refusing redirect")
-	}
-	prev := via[len(via)-1]
-	if prev.URL == nil || !sameOrigin(prev.URL, req.URL) {
-		return fmt.Errorf("refusing redirect to %s", req.URL.Host)
 	}
 	return nil
 }
