@@ -205,7 +205,7 @@ func TestGetStatus_completed(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := higgsfield.NewClient(testAPIKey, srv.Client())
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	st, err := client.GetStatus(context.Background(), srv.URL+"/requests/req-1/status")
 	if err != nil {
 		t.Fatalf("GetStatus: %v", err)
@@ -232,7 +232,7 @@ func TestGetStatus_failed(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := higgsfield.NewClient(testAPIKey, srv.Client())
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	st, err := client.GetStatus(context.Background(), srv.URL+"/status")
 	if err != nil {
 		t.Fatalf("GetStatus: %v", err)

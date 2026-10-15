@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 )
 
 // Kind identifies a supported generation endpoint.
@@ -25,7 +24,7 @@ type Media struct {
 }
 
 // Media returns the description for this config's model.
-// Unsupported video endpoints return an error instead of an image description.
+// Unsupported models return an error instead of an image description.
 func (c Config) Media() (Media, error) {
 	profile, ok := classify(c.Model)
 	if !ok {
@@ -71,24 +70,17 @@ var videoProfile = modelProfile{
 	duration:        durationRule{applies: true, min: 4, max: 30, fallback: 5},
 }
 
-// videoWorkflows are path endings for video endpoints this Action does not call.
-// Seedance 2.5 text-to-video is matched by its full path before this list.
-var videoWorkflows = map[string]struct{}{
-	"text-to-video":  {},
-	"image-to-video": {},
-}
-
 // classify returns the profile for a supported model.
-// The boolean is false for video endpoints this Action does not call.
+// The boolean is false for every path this Action does not call.
 func classify(model string) (modelProfile, bool) {
 	switch model {
+	case DefaultModel:
+		return imageProfile, true
 	case VideoModel:
 		return videoProfile, true
-	}
-	if _, ok := videoWorkflows[workflowName(model)]; ok {
+	default:
 		return modelProfile{}, false
 	}
-	return imageProfile, true
 }
 
 func (c *Config) applyModelDefaults() {
@@ -124,14 +116,7 @@ func (p modelProfile) validate(c Config) error {
 }
 
 func unsupportedModel(model string) error {
-	return fmt.Errorf("unsupported video model %q; only %s is supported", model, VideoModel)
-}
-
-func workflowName(model string) string {
-	if i := strings.LastIndex(model, "/"); i >= 0 {
-		return model[i+1:]
-	}
-	return model
+	return fmt.Errorf("unsupported model %q; supported models are %s and %s", model, DefaultModel, VideoModel)
 }
 
 func setOf(values ...string) map[string]struct{} {

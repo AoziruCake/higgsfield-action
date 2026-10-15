@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 )
 
 const maxDownloadBytes = 512 << 20 // 512 MiB; 1080p 30s high-bitrate video can exceed 100 MiB
 
 // Download fetches media from a completed request's CDN URL.
-// The request is unauthenticated: output URLs are public for a limited time.
+// The request is unauthenticated. The URL must be https on a Higgsfield CDN
+// host, or the same origin as this client's API base (used by tests).
 //
 // The Action timeout on ctx is the deadline. The JSON client's Timeout is not
 // applied, so a large video can finish inside the Action timeout.
@@ -19,7 +21,15 @@ func (c *Client) Download(ctx context.Context, mediaURL string, w io.Writer) err
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
+	parsed, err := url.Parse(mediaURL)
+	if err != nil {
+		return fmt.Errorf("media url is invalid")
+	}
+	if err := c.allowMedia(parsed); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
 	if err != nil {
 		return fmt.Errorf("create download request: %w", err)
 	}
@@ -28,6 +38,9 @@ func (c *Client) Download(ctx context.Context, mediaURL string, w io.Writer) err
 
 	resp, err := c.downloadHTTP().Do(req)
 	if err != nil {
+		if resp != nil && resp.Body != nil {
+			resp.Body.Close()
+		}
 		return fmt.Errorf("download media: %w", err)
 	}
 	defer resp.Body.Close()
@@ -52,8 +65,15 @@ func (c *Client) Download(ctx context.Context, mediaURL string, w io.Writer) err
 // caller's context is the only deadline.
 func (c *Client) downloadHTTP() *http.Client {
 	return &http.Client{
-		Transport:     c.httpClient.Transport,
-		CheckRedirect: c.httpClient.CheckRedirect,
-		Jar:           c.httpClient.Jar,
+		Transport: c.httpClient.Transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			if req.URL == nil {
+				return fmt.Errorf("refusing redirect")
+			}
+			return c.allowMedia(req.URL)
+		},
 	}
 }

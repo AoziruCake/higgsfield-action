@@ -13,7 +13,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
+		fmt.Fprintln(os.Stderr, "Error:", sanitizeWorkflowLog(err.Error()))
 		os.Exit(1)
 	}
 }

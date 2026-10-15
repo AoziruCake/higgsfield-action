@@ -43,27 +43,40 @@ jobs:
           timeout: 15m
 
       - name: Verify file exists
+        env:
+          OUTPUT_PATH: ${{ steps.higgsfield.outputs.output-path }}
+          REQUESTED_OUTPUT: ${{ inputs.output }}
         run: |
           set -euo pipefail
-          rel="${{ steps.higgsfield.outputs.output-path }}"
-          case "$rel" in
-            /*)
-              echo "output-path must be workspace-relative, got $rel" >&2
+          case "$OUTPUT_PATH" in
+            /*|..|../*|*/../*|*/..)
+              echo "output-path must be workspace-relative" >&2
               exit 1
               ;;
           esac
-          test -f "$GITHUB_WORKSPACE/$rel"
-          test -f "$GITHUB_WORKSPACE/${{ inputs.output }}"
+          case "$REQUESTED_OUTPUT" in
+            /*|..|../*|*/../*|*/..)
+              echo "output must be workspace-relative" >&2
+              exit 1
+              ;;
+          esac
+          test -f "$GITHUB_WORKSPACE/$OUTPUT_PATH"
+          test -f "$GITHUB_WORKSPACE/$REQUESTED_OUTPUT"
 
       - name: Print outputs
+        env:
+          REQUEST_ID: ${{ steps.higgsfield.outputs.request-id }}
+          IMAGE_URL: ${{ steps.higgsfield.outputs.image-url }}
+          VIDEO_URL: ${{ steps.higgsfield.outputs.video-url }}
+          OUTPUT_PATH: ${{ steps.higgsfield.outputs.output-path }}
         run: |
-          echo "request-id=${{ steps.higgsfield.outputs.request-id }}"
-          echo "image-url=${{ steps.higgsfield.outputs.image-url }}"
-          echo "video-url=${{ steps.higgsfield.outputs.video-url }}"
-          echo "output-path=${{ steps.higgsfield.outputs.output-path }}"
+          printf 'request-id=%s\n' "$REQUEST_ID"
+          printf 'image-url=%s\n' "$IMAGE_URL"
+          printf 'video-url=%s\n' "$VIDEO_URL"
+          printf 'output-path=%s\n' "$OUTPUT_PATH"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.higgsfield.outputs.video-url && 'higgsfield-video' || 'higgsfield-image' }}
-          path: ${{ inputs.output }}
+          path: ${{ steps.higgsfield.outputs.output-path }}

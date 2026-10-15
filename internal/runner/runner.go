@@ -148,7 +148,7 @@ func prepareOutput(output string) (outputDest, error) {
 		return outputDest{}, fmt.Errorf("resolve output path: %w", err)
 	}
 	dir := filepath.Dir(abs)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := workspace.MkdirWithin(dir); err != nil {
 		return outputDest{}, fmt.Errorf("create output directory: %w", err)
 	}
 	if err := workspace.ProbeWritable(dir); err != nil {
@@ -172,13 +172,15 @@ func generate(ctx context.Context, client *higgsfield.Client, job mediaJob) (hig
 }
 
 func saveMedia(ctx context.Context, client *higgsfield.Client, outputPath, mediaURL, noun string) error {
-	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	file, err := createOutput(outputPath)
 	if err != nil {
 		return fmt.Errorf("create output file: %w", err)
 	}
 	defer file.Close()
 
 	if err := client.Download(ctx, mediaURL, file); err != nil {
+		_ = file.Close()
+		_ = os.Remove(outputPath)
 		return fmt.Errorf("download %s: %w", noun, err)
 	}
 	return nil

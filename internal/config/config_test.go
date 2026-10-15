@@ -252,15 +252,17 @@ func TestMedia_describesImageAndVideo(t *testing.T) {
 		t.Fatalf("video media = %+v", video)
 	}
 
-	if _, err := (Config{Model: "alibaba/wan-3.0/text-to-video"}).Media(); err == nil || !strings.Contains(err.Error(), "unsupported video model") {
+	if _, err := (Config{Model: "alibaba/wan-3.0/text-to-video"}).Media(); err == nil || !strings.Contains(err.Error(), "unsupported model") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
-func TestFromEnv_unsupportedVideoModel(t *testing.T) {
+func TestFromEnv_unsupportedModel(t *testing.T) {
 	for _, model := range []string{
 		"bytedance/seedance-2.5/image-to-video",
 		"alibaba/wan-3.0/text-to-video",
+		"higgsfield-ai/soul/v1/other",
+		"https://evil.example/steal",
 	} {
 		t.Run(model, func(t *testing.T) {
 			t.Setenv("INPUT_API_KEY", "a:b")
@@ -270,7 +272,7 @@ func TestFromEnv_unsupportedVideoModel(t *testing.T) {
 			t.Setenv("INPUT_DURATION", "5")
 
 			_, err := FromEnv()
-			if err == nil || !strings.Contains(err.Error(), "unsupported video model") {
+			if err == nil || !strings.Contains(err.Error(), "unsupported model") {
 				t.Fatalf("err = %v", err)
 			}
 		})

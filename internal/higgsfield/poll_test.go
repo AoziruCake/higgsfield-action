@@ -45,7 +45,7 @@ func TestWaitForCompletion_eventuallyCompleted(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := higgsfield.NewClient(testAPIKey, srv.Client())
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	st, err := client.WaitForCompletion(context.Background(), srv.URL, instantPollOptions())
 	if err != nil {
 		t.Fatalf("WaitForCompletion: %v", err)
@@ -71,7 +71,7 @@ func TestWaitForCompletion_failedTerminal(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := higgsfield.NewClient(testAPIKey, srv.Client())
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	_, err := client.WaitForCompletion(context.Background(), srv.URL, instantPollOptions())
 	var statusErr *higgsfield.StatusError
 	if !errors.As(err, &statusErr) {
@@ -91,7 +91,7 @@ func TestWaitForCompletion_unauthorizedStops(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := higgsfield.NewClient(testAPIKey, srv.Client())
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	_, err := client.WaitForCompletion(context.Background(), srv.URL, instantPollOptions())
 	var apiErr *higgsfield.APIError
 	if !errors.As(err, &apiErr) || !apiErr.IsUnauthorized() {
@@ -117,7 +117,7 @@ func TestWaitForCompletion_retriesServerError(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := higgsfield.NewClient(testAPIKey, srv.Client())
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	_, err := client.WaitForCompletion(context.Background(), srv.URL, instantPollOptions())
 	if err != nil {
 		t.Fatalf("WaitForCompletion: %v", err)
@@ -140,7 +140,7 @@ func TestWaitForCompletion_respectsContext(t *testing.T) {
 	defer cancel()
 
 	opts := higgsfield.DefaultPollOptions()
-	client := higgsfield.NewClient(testAPIKey, srv.Client())
+	client := higgsfield.NewClient(testAPIKey, srv.Client()).WithBaseURL(srv.URL)
 	_, err := client.WaitForCompletion(ctx, srv.URL, opts)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected deadline exceeded, got %v", err)

@@ -37,8 +37,9 @@ jobs:
         run: |
           set -euo pipefail
           image_user="$(docker image inspect higgsfield-action:ci --format '{{.Config.User}}')"
-          if [ -z "$image_user" ]; then
-            image_user=0
+          if [ "$image_user" != "1001" ]; then
+            echo "image user must be 1001, got ${image_user:-empty}" >&2
+            exit 1
           fi
           workdir="$(mktemp -d)"
           docker run --rm -v "$workdir:/github/workspace" alpine:3.21 \
