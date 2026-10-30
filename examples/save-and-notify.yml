@@ -1,0 +1,63 @@
+# Copy this file into the calling repository as .github/workflows/save-and-notify.yml.
+# It is an example and does not run in higgsfield-action itself.
+# Each run spends the caller's Higgsfield credits.
+# Artifact upload and the Discord webhook are steps in this workflow, not inputs of the Action.
+# schedule would spend credits on every tick even when nothing changed; this example stays manual.
+
+name: Generate, save, and notify
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Generate image
+        id: higgsfield
+        uses: AoziruCake/higgsfield-action@v1
+        with:
+          api-key: ${{ secrets.HIGGSFIELD_API_KEY }}
+          prompt-file: prompts/latest.txt
+          output: output/latest.png
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: higgsfield-image
+          path: ${{ steps.higgsfield.outputs.output-path }}
+
+      - name: Notify Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          IMAGE_URL: ${{ steps.higgsfield.outputs.image-url }}
+          VIDEO_URL: ${{ steps.higgsfield.outputs.video-url }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Set secret DISCORD_WEBHOOK_URL, or remove this step." >&2
+            exit 1
+          fi
+          url="$IMAGE_URL"
+          if [ -n "$VIDEO_URL" ]; then
+            url="$VIDEO_URL"
+          fi
+          payload=$(jq -n --arg content "Generation finished: $url" '{content: $content}')
+          curl -fsS -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK_URL"
+
+      # Slack incoming webhook, using the same url variable as above:
+      #   curl -fsS -H "Content-Type: application/json" \
+      #     -d "$(jq -n --arg text "Generation finished: $url" '{text: $text}')" \
+      #     "$SLACK_WEBHOOK_URL"
+      #
+      # Pull request comment (pull_request workflows only). Add
+      # permissions: pull-requests: write, then:
+      #   gh pr comment "$PR_NUMBER" --body "Generation finished: $url"

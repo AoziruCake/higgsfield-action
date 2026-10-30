@@ -163,6 +163,144 @@ func executeSuccess(t *testing.T, cfg config.Config, handler func(baseURL string
 	return string(rawFile), string(rawOutputs), srv.URL
 }
 
+func TestExecute_promptFileSubmitsTrimmedText(t *testing.T) {
+	const imageBody = "png-bytes"
+	const wantPrompt = "from the file"
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "prompts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "prompts", "latest.txt"), []byte("  from the file \n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outputsPath := filepath.Join(root, "github-output")
+	t.Setenv("GITHUB_WORKSPACE", root)
+	t.Setenv("GITHUB_OUTPUT", outputsPath)
+
+	srv := httptest.NewServer(nil)
+	t.Cleanup(srv.Close)
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/higgsfield-ai/soul/v2/standard"):
+			var body struct {
+				Prompt string `json:"prompt"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode body: %v", err)
+			}
+			if body.Prompt != wantPrompt {
+				t.Errorf("prompt = %q, want %q", body.Prompt, wantPrompt)
+			}
+			_ = json.NewEncoder(w).Encode(higgsfield.SubmitResponse{
+				Status:    higgsfield.StatusQueued,
+				RequestID: "req-file",
+				StatusURL: srv.URL + "/requests/req-file/status",
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/requests/req-file/status":
+			_ = json.NewEncoder(w).Encode(higgsfield.RequestStatus{
+				Status:    higgsfield.StatusCompleted,
+				RequestID: "req-file",
+				Images:    []higgsfield.MediaOutput{{URL: srv.URL + "/image.png"}},
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/image.png":
+			_, _ = w.Write([]byte(imageBody))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	})
+
+	cfg := config.Config{
+		APIKey:      "id:secret",
+		PromptFile:  "prompts/latest.txt",
+		Output:      "out.png",
+		Model:       config.DefaultModel,
+		AspectRatio: "4:3",
+		Resolution:  "720p",
+		Timeout:     time.Minute,
+	}
+	client := higgsfield.NewClient(cfg.APIKey, srv.Client()).WithBaseURL(srv.URL)
+	outputs, err := gha.NewOutputWriterFromEnv()
+	if err != nil {
+		t.Fatalf("NewOutputWriterFromEnv: %v", err)
+	}
+	if err := execute(context.Background(), cfg, client, outputs); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	fileBody, err := os.ReadFile(filepath.Join(root, "out.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(fileBody) != imageBody {
+		t.Fatalf("output file = %q", fileBody)
+	}
+	content, err := os.ReadFile(outputsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "request-id=req-file\n") {
+		t.Fatalf("outputs = %q", content)
+	}
+}
+
+func TestExecute_promptFileMissingSkipsAPI(t *testing.T) {
+	posts := executePromptPreflight(t, config.Config{
+		APIKey:      "id:secret",
+		PromptFile:  "prompts/missing.txt",
+		Output:      "out.png",
+		Model:       config.DefaultModel,
+		AspectRatio: "4:3",
+		Resolution:  "720p",
+		Timeout:     time.Minute,
+	})
+	if posts != 0 {
+		t.Fatalf("API calls = %d, want 0", posts)
+	}
+}
+
+func TestExecute_bothPromptSourcesSkipAPI(t *testing.T) {
+	posts := executePromptPreflight(t, config.Config{
+		APIKey:      "id:secret",
+		Prompt:      "A cat",
+		PromptFile:  "prompts/latest.txt",
+		Output:      "out.png",
+		Model:       config.DefaultModel,
+		AspectRatio: "4:3",
+		Resolution:  "720p",
+		Timeout:     time.Minute,
+	})
+	if posts != 0 {
+		t.Fatalf("API calls = %d, want 0", posts)
+	}
+}
+
+func executePromptPreflight(t *testing.T, cfg config.Config) int {
+	t.Helper()
+
+	var posts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts++
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+	}))
+	t.Cleanup(srv.Close)
+
+	root := t.TempDir()
+	t.Setenv("GITHUB_WORKSPACE", root)
+	t.Setenv("GITHUB_OUTPUT", filepath.Join(root, "github-output"))
+
+	client := higgsfield.NewClient(cfg.APIKey, srv.Client()).WithBaseURL(srv.URL)
+	outputs, err := gha.NewOutputWriterFromEnv()
+	if err != nil {
+		t.Fatalf("NewOutputWriterFromEnv: %v", err)
+	}
+	if err := execute(context.Background(), cfg, client, outputs); err == nil {
+		t.Fatal("expected prompt error")
+	}
+	return posts
+}
+
 func TestExecute_preflightSkipsAPI(t *testing.T) {
 	var posts int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

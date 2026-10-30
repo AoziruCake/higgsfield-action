@@ -10,8 +10,11 @@ inputs:
     description: Higgsfield API credentials in KEY_ID:KEY_SECRET format
     required: true
   prompt:
-    description: Text prompt for image or video generation
-    required: true
+    description: Text prompt for image or video generation. Set this or prompt-file, not both.
+    required: false
+  prompt-file:
+    description: Workspace-relative path to a UTF-8 text file used as the prompt (max 16 KiB). Set this or prompt, not both.
+    required: false
   output:
     description: Path where the generated file will be saved (relative to the workspace)
     required: true

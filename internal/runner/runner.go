@@ -29,6 +29,12 @@ func execute(ctx context.Context, cfg config.Config, client *higgsfield.Client, 
 		return err
 	}
 
+	// Load the prompt file before any directory is created or any credit is spent.
+	cfg, err := resolvePrompt(cfg)
+	if err != nil {
+		return err
+	}
+
 	// Fail before submit: a later mkdir/output failure would still consume credits.
 	dest, err := prepareOutput(cfg.Output)
 	if err != nil {
@@ -113,6 +119,21 @@ func submitVideo(ctx context.Context, client *higgsfield.Client, cfg config.Conf
 		PromptFields: promptFields(cfg),
 		Duration:     cfg.Duration.Seconds(),
 	})
+}
+
+func resolvePrompt(cfg config.Config) (config.Config, error) {
+	if err := config.ValidatePromptSource(cfg.Prompt, cfg.PromptFile); err != nil {
+		return config.Config{}, err
+	}
+	if cfg.PromptFile == "" {
+		return cfg, nil
+	}
+	text, err := workspace.ReadPromptFile(cfg.PromptFile)
+	if err != nil {
+		return config.Config{}, err
+	}
+	cfg.Prompt = text
+	return cfg, nil
 }
 
 func promptFields(cfg config.Config) higgsfield.PromptFields {

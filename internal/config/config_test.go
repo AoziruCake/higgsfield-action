@@ -261,6 +261,50 @@ func TestMedia_describesImageAndVideo(t *testing.T) {
 	}
 }
 
+func TestFromEnv_promptFile(t *testing.T) {
+	t.Setenv("INPUT_API_KEY", "key-id:secret")
+	t.Setenv("INPUT_PROMPT", "")
+	t.Setenv("INPUT_PROMPT_FILE", "")
+	t.Setenv("INPUT_PROMPT-FILE", "prompts/latest.txt")
+	t.Setenv("INPUT_OUTPUT", "out.png")
+
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if cfg.Prompt != "" {
+		t.Fatalf("Prompt = %q, want empty until the file is read", cfg.Prompt)
+	}
+	if cfg.PromptFile != "prompts/latest.txt" {
+		t.Fatalf("PromptFile = %q", cfg.PromptFile)
+	}
+}
+
+func TestFromEnv_rejectsBothPromptSources(t *testing.T) {
+	t.Setenv("INPUT_API_KEY", "a:b")
+	t.Setenv("INPUT_PROMPT", "A cat")
+	t.Setenv("INPUT_PROMPT_FILE", "prompts/latest.txt")
+	t.Setenv("INPUT_OUTPUT", "out.png")
+
+	_, err := FromEnv()
+	if err == nil || !strings.Contains(err.Error(), "not both") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestFromEnv_requiresPromptSource(t *testing.T) {
+	t.Setenv("INPUT_API_KEY", "a:b")
+	t.Setenv("INPUT_PROMPT", "")
+	t.Setenv("INPUT_PROMPT_FILE", "")
+	t.Setenv("INPUT_PROMPT-FILE", "")
+	t.Setenv("INPUT_OUTPUT", "out.png")
+
+	_, err := FromEnv()
+	if err == nil || !strings.Contains(err.Error(), "prompt or prompt-file is required") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestFromEnv_unsupportedModel(t *testing.T) {
 	for _, model := range []string{
 		"bytedance/seedance-2.5/image-to-video",

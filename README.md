@@ -38,6 +38,16 @@ Text-to-video uses [Seedance 2.5](https://docs.higgsfield.ai/docs/models/seedanc
 
 Pin a release with `@v0.1.0` if you need a fixed revision. `@v1` is the floating major tag (see [RELEASING.md](RELEASING.md)).
 
+Set `prompt` or `prompt-file`, not both. `prompt-file` is a workspace-relative UTF-8 text file (16 KiB maximum). The Action trims it and uses that text as the prompt.
+
+### Recipes
+
+The Action only submits, waits, and downloads. Push, pull request, and cron triggers, artifact upload, and chat notifications belong in the calling workflow. Copy an example into that repository's `.github/workflows/` directory. These files do not run in this repository. Every generation spends the caller's Higgsfield credits. A cron schedule spends credits on every tick, even when nothing changed.
+
+- [Generate when a prompt file changes](examples/generate-on-push.yml) — push or pull request that touches `prompts/**`, using `prompt-file`.
+- [Daily generation](examples/daily-cron.yml) — `schedule` plus `workflow_dispatch`. Run it manually before leaving the schedule on.
+- [Save the file and notify](examples/save-and-notify.yml) — `actions/upload-artifact`, then a Discord webhook. Slack and a pull request comment are noted in the file.
+
 ### Secrets
 
 Create a repository secret `HIGGSFIELD_API_KEY` with your credentials in **`KEY_ID:KEY_SECRET`** format ([Authentication](https://docs.higgsfield.ai/docs/authentication.md)).
@@ -47,7 +57,8 @@ Create a repository secret `HIGGSFIELD_API_KEY` with your credentials in **`KEY_
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `api-key` | yes | — | `KEY_ID:KEY_SECRET` |
-| `prompt` | yes | — | Text prompt |
+| `prompt` | no | — | Text prompt. Set this or `prompt-file`, not both |
+| `prompt-file` | no | — | Workspace-relative UTF-8 text file used as the prompt (16 KiB max). Set this or `prompt`, not both |
 | `output` | yes | — | Output file path (workspace-relative) |
 | `model` | no | `higgsfield-ai/soul/v2/standard` | `higgsfield-ai/soul/v2/standard` or `bytedance/seedance-2.5/text-to-video` |
 | `aspect-ratio` | no | `4:3` for images, `16:9` for Seedance 2.5 | Soul v2 accepts its usual ratios. Seedance 2.5 accepts `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9` |
@@ -79,6 +90,8 @@ docker build -t higgsfield-action .
 3. Download the artifact from the completed run. Image runs upload `higgsfield-image`. Video runs upload `higgsfield-video`.
 
 The workflow dispatch form accepts `model` and `duration`. Leave them at the defaults for an image. For a video run, set `model` to `bytedance/seedance-2.5/text-to-video` and `output` to a path such as `output/integration.mp4`. `duration` can stay empty (the Action uses 5 seconds).
+
+That form sends `prompt`. To try `prompt-file`, point a caller workflow at a UTF-8 text file in the workspace (see [Recipes](#recipes)). Do not set both inputs.
 
 ### Troubleshooting
 

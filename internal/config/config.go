@@ -43,6 +43,7 @@ func (d Duration) Seconds() int { return d.seconds }
 type Config struct {
 	APIKey      string // KEY_ID:KEY_SECRET
 	Prompt      string
+	PromptFile  string // workspace-relative file; mutually exclusive with Prompt
 	Output      string // workspace-relative path
 	Model       string
 	AspectRatio string
@@ -56,6 +57,7 @@ func FromEnv() (Config, error) {
 	cfg := Config{
 		APIKey:      actionInput("api-key"),
 		Prompt:      actionInput("prompt"),
+		PromptFile:  actionInput("prompt-file"),
 		Output:      actionInput("output"),
 		Model:       actionInput("model"),
 		AspectRatio: actionInput("aspect-ratio"),
@@ -101,8 +103,8 @@ func (c Config) Validate() error {
 	if err := validateAPIKey(c.APIKey); err != nil {
 		return err
 	}
-	if c.Prompt == "" {
-		return fmt.Errorf("prompt is required")
+	if err := ValidatePromptSource(c.Prompt, c.PromptFile); err != nil {
+		return err
 	}
 	if c.Output == "" {
 		return fmt.Errorf("output is required")
@@ -115,6 +117,19 @@ func (c Config) Validate() error {
 		return unsupportedModel(c.Model)
 	}
 	return profile.validate(c)
+}
+
+// ValidatePromptSource reports an error unless exactly one of prompt or promptFile is set.
+// The file itself is not read here. The runner loads it before generation.
+func ValidatePromptSource(prompt, promptFile string) error {
+	switch {
+	case prompt == "" && promptFile == "":
+		return fmt.Errorf("prompt or prompt-file is required")
+	case prompt != "" && promptFile != "":
+		return fmt.Errorf("set prompt or prompt-file, not both")
+	default:
+		return nil
+	}
 }
 
 // actionInput reads an Action input from the environment.
