@@ -16,30 +16,7 @@ import (
 // The result must be a file path inside the workspace. ".." and any symlink
 // along the path are rejected, so a link cannot redirect the write outside.
 func ResolveOutputPath(output string) (string, error) {
-	output = strings.TrimSpace(output)
-	if output == "" {
-		return "", fmt.Errorf("output is required")
-	}
-	if strings.ContainsRune(output, 0) {
-		return "", fmt.Errorf("output path is invalid")
-	}
-
-	root, err := workspaceRoot()
-	if err != nil {
-		return "", err
-	}
-
-	var abs string
-	if filepath.IsAbs(output) {
-		abs = filepath.Clean(output)
-	} else {
-		abs = filepath.Clean(filepath.Join(root, output))
-	}
-
-	if err := walkComponents(root, abs, false, nil, false, "output path"); err != nil {
-		return "", err
-	}
-	return abs, nil
+	return resolveInsideWorkspace(output, "output is required", "output path is invalid", "output path")
 }
 
 // maxPromptFileBytes is the prompt-file size limit (16 KiB).
@@ -49,26 +26,8 @@ const maxPromptFileBytes = 16 * 1024
 // The path uses the same confinement as an output file: ".." and any symlink
 // are rejected. The returned text is space-trimmed and non-empty.
 func ReadPromptFile(path string) (string, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "", fmt.Errorf("prompt-file is required")
-	}
-	if strings.ContainsRune(path, 0) {
-		return "", fmt.Errorf("prompt-file path is invalid")
-	}
-
-	root, err := workspaceRoot()
+	abs, err := resolveInsideWorkspace(path, "prompt-file is required", "prompt-file path is invalid", "prompt-file")
 	if err != nil {
-		return "", err
-	}
-
-	var abs string
-	if filepath.IsAbs(path) {
-		abs = filepath.Clean(path)
-	} else {
-		abs = filepath.Clean(filepath.Join(root, path))
-	}
-	if err := walkComponents(root, abs, false, nil, false, "prompt-file"); err != nil {
 		return "", err
 	}
 
@@ -78,9 +37,6 @@ func ReadPromptFile(path string) (string, error) {
 			return "", fmt.Errorf("prompt-file not found")
 		}
 		return "", fmt.Errorf("prompt-file: %w", err)
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("prompt-file must not contain a symlink")
 	}
 	if !info.Mode().IsRegular() {
 		return "", fmt.Errorf("prompt-file must be a regular file")
@@ -110,6 +66,35 @@ func ReadPromptFile(path string) (string, error) {
 		return "", fmt.Errorf("prompt-file is empty")
 	}
 	return text, nil
+}
+
+// resolveInsideWorkspace maps path to an absolute file path inside the workspace.
+// emptyMsg and invalidMsg are the blank and NUL errors. label names the path in
+// confinement errors, so a prompt file does not reuse output wording.
+func resolveInsideWorkspace(path, emptyMsg, invalidMsg, label string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("%s", emptyMsg)
+	}
+	if strings.ContainsRune(path, 0) {
+		return "", fmt.Errorf("%s", invalidMsg)
+	}
+
+	root, err := workspaceRoot()
+	if err != nil {
+		return "", err
+	}
+
+	var abs string
+	if filepath.IsAbs(path) {
+		abs = filepath.Clean(path)
+	} else {
+		abs = filepath.Clean(filepath.Join(root, path))
+	}
+	if err := walkComponents(root, abs, false, nil, false, label); err != nil {
+		return "", err
+	}
+	return abs, nil
 }
 
 // Rel returns a workspace-relative path with forward slashes.

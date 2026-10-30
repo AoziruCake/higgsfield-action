@@ -122,7 +122,7 @@ func submitVideo(ctx context.Context, client *higgsfield.Client, cfg config.Conf
 }
 
 func resolvePrompt(cfg config.Config) (config.Config, error) {
-	if err := config.ValidatePromptSource(cfg.Prompt, cfg.PromptFile); err != nil {
+	if err := cfg.ValidatePromptSource(); err != nil {
 		return config.Config{}, err
 	}
 	if cfg.PromptFile == "" {

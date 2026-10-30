@@ -132,12 +132,20 @@ func TestExecute_videoSuccess(t *testing.T) {
 
 func executeSuccess(t *testing.T, cfg config.Config, handler func(baseURL string) http.Handler) (fileBody, outputs, baseURL string) {
 	t.Helper()
+	return executePrepared(t, cfg, handler, nil)
+}
+
+func executePrepared(t *testing.T, cfg config.Config, handler func(baseURL string) http.Handler, prepare func(root string)) (fileBody, outputs, baseURL string) {
+	t.Helper()
 
 	srv := httptest.NewServer(nil)
 	t.Cleanup(srv.Close)
 	srv.Config.Handler = handler(srv.URL)
 
 	root := t.TempDir()
+	if prepare != nil {
+		prepare(root)
+	}
 	outputFile := filepath.Join(root, filepath.FromSlash(cfg.Output))
 	outputsPath := filepath.Join(root, "github-output")
 	t.Setenv("GITHUB_WORKSPACE", root)
@@ -167,51 +175,7 @@ func TestExecute_promptFileSubmitsTrimmedText(t *testing.T) {
 	const imageBody = "png-bytes"
 	const wantPrompt = "from the file"
 
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "prompts"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "prompts", "latest.txt"), []byte("  from the file \n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	outputsPath := filepath.Join(root, "github-output")
-	t.Setenv("GITHUB_WORKSPACE", root)
-	t.Setenv("GITHUB_OUTPUT", outputsPath)
-
-	srv := httptest.NewServer(nil)
-	t.Cleanup(srv.Close)
-	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/higgsfield-ai/soul/v2/standard"):
-			var body struct {
-				Prompt string `json:"prompt"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Errorf("decode body: %v", err)
-			}
-			if body.Prompt != wantPrompt {
-				t.Errorf("prompt = %q, want %q", body.Prompt, wantPrompt)
-			}
-			_ = json.NewEncoder(w).Encode(higgsfield.SubmitResponse{
-				Status:    higgsfield.StatusQueued,
-				RequestID: "req-file",
-				StatusURL: srv.URL + "/requests/req-file/status",
-			})
-		case r.Method == http.MethodGet && r.URL.Path == "/requests/req-file/status":
-			_ = json.NewEncoder(w).Encode(higgsfield.RequestStatus{
-				Status:    higgsfield.StatusCompleted,
-				RequestID: "req-file",
-				Images:    []higgsfield.MediaOutput{{URL: srv.URL + "/image.png"}},
-			})
-		case r.Method == http.MethodGet && r.URL.Path == "/image.png":
-			_, _ = w.Write([]byte(imageBody))
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-	})
-
-	cfg := config.Config{
+	fileBody, content, baseURL := executePrepared(t, config.Config{
 		APIKey:      "id:secret",
 		PromptFile:  "prompts/latest.txt",
 		Output:      "out.png",
@@ -219,28 +183,54 @@ func TestExecute_promptFileSubmitsTrimmedText(t *testing.T) {
 		AspectRatio: "4:3",
 		Resolution:  "720p",
 		Timeout:     time.Minute,
-	}
-	client := higgsfield.NewClient(cfg.APIKey, srv.Client()).WithBaseURL(srv.URL)
-	outputs, err := gha.NewOutputWriterFromEnv()
-	if err != nil {
-		t.Fatalf("NewOutputWriterFromEnv: %v", err)
-	}
-	if err := execute(context.Background(), cfg, client, outputs); err != nil {
-		t.Fatalf("execute: %v", err)
-	}
+	}, func(baseURL string) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch {
+			case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/higgsfield-ai/soul/v2/standard"):
+				var body struct {
+					Prompt string `json:"prompt"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode body: %v", err)
+				}
+				if body.Prompt != wantPrompt {
+					t.Errorf("prompt = %q, want %q", body.Prompt, wantPrompt)
+				}
+				_ = json.NewEncoder(w).Encode(higgsfield.SubmitResponse{
+					Status:    higgsfield.StatusQueued,
+					RequestID: "req-file",
+					StatusURL: baseURL + "/requests/req-file/status",
+				})
+			case r.Method == http.MethodGet && r.URL.Path == "/requests/req-file/status":
+				_ = json.NewEncoder(w).Encode(higgsfield.RequestStatus{
+					Status:    higgsfield.StatusCompleted,
+					RequestID: "req-file",
+					Images:    []higgsfield.MediaOutput{{URL: baseURL + "/image.png"}},
+				})
+			case r.Method == http.MethodGet && r.URL.Path == "/image.png":
+				_, _ = w.Write([]byte(imageBody))
+			default:
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+		})
+	}, func(root string) {
+		promptPath := filepath.Join(root, "prompts", "latest.txt")
+		if err := os.MkdirAll(filepath.Dir(promptPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(promptPath, []byte("  from the file \n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	})
 
-	fileBody, err := os.ReadFile(filepath.Join(root, "out.png"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(fileBody) != imageBody {
+	if fileBody != imageBody {
 		t.Fatalf("output file = %q", fileBody)
 	}
-	content, err := os.ReadFile(outputsPath)
-	if err != nil {
-		t.Fatal(err)
+	if !strings.Contains(content, "request-id=req-file\n") {
+		t.Fatalf("outputs = %q", content)
 	}
-	if !strings.Contains(string(content), "request-id=req-file\n") {
+	if !strings.Contains(content, "image-url="+baseURL+"/image.png\n") {
 		t.Fatalf("outputs = %q", content)
 	}
 }

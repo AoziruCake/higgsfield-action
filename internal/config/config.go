@@ -103,7 +103,7 @@ func (c Config) Validate() error {
 	if err := validateAPIKey(c.APIKey); err != nil {
 		return err
 	}
-	if err := ValidatePromptSource(c.Prompt, c.PromptFile); err != nil {
+	if err := c.ValidatePromptSource(); err != nil {
 		return err
 	}
 	if c.Output == "" {
@@ -119,13 +119,13 @@ func (c Config) Validate() error {
 	return profile.validate(c)
 }
 
-// ValidatePromptSource reports an error unless exactly one of prompt or promptFile is set.
+// ValidatePromptSource reports an error unless exactly one of Prompt or PromptFile is set.
 // The file itself is not read here. The runner loads it before generation.
-func ValidatePromptSource(prompt, promptFile string) error {
+func (c Config) ValidatePromptSource() error {
 	switch {
-	case prompt == "" && promptFile == "":
+	case c.Prompt == "" && c.PromptFile == "":
 		return fmt.Errorf("prompt or prompt-file is required")
-	case prompt != "" && promptFile != "":
+	case c.Prompt != "" && c.PromptFile != "":
 		return fmt.Errorf("set prompt or prompt-file, not both")
 	default:
 		return nil
