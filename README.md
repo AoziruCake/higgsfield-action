@@ -104,7 +104,7 @@ That form sends `prompt`. To try `prompt-file`, point a caller workflow at a UTF
 
 ## Releasing
 
-See [RELEASING.md](RELEASING.md) for tagging `v1` / `v0.1.0` and Marketplace notes.
+See [CHANGELOG.md](CHANGELOG.md) for notable changes, and [RELEASING.md](RELEASING.md) for tagging `v1` / `v0.1.0` and Marketplace notes.
 
 ## Support
 

@@ -43,4 +43,5 @@ Pushing version tags runs [.github/workflows/release.yml](.github/workflows/rele
 - [ ] `docker build .` succeeds
 - [ ] Integration workflow (`workflow_dispatch`) completed with a real API key
 - [ ] README usage example matches `action.yml` inputs/outputs
+- [ ] [CHANGELOG.md](CHANGELOG.md) moves the Unreleased notes under the new version
 - [ ] No secrets or credentials in the repository
