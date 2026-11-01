@@ -4,6 +4,8 @@ Notable changes to this Action. The floating tag `v1` points at the latest 1.x r
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-01
+
 ### Added
 
 - `prompt-file` input. Pass a workspace-relative UTF-8 text file (16 KiB maximum) and the Action uses the trimmed text as the prompt. Set `prompt` or `prompt-file`, not both. Workflows that pass only `prompt` behave as before.
