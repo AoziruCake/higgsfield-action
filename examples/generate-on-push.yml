@@ -1,0 +1,35 @@
+# Copy this file into the calling repository as .github/workflows/generate-on-push.yml.
+# It is an example and does not run in higgsfield-action itself.
+# Each run spends the caller's Higgsfield credits.
+# A schedule (cron) trigger spends credits on every tick even when nothing changed. This example does not use one.
+#
+# Fork pull requests do not receive repository secrets, so this job fails closed there.
+
+name: Generate from prompt file
+
+on:
+  push:
+    paths:
+      - "prompts/**"
+  pull_request:
+    paths:
+      - "prompts/**"
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Generate image
+        id: higgsfield
+        uses: AoziruCake/higgsfield-action@v1
+        with:
+          api-key: ${{ secrets.HIGGSFIELD_API_KEY }}
+          prompt-file: prompts/latest.txt
+          output: output/latest.png

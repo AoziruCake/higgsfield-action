@@ -3,9 +3,11 @@ package workspace
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 // ResolveOutputPath maps an Action output path to an absolute filesystem path.
@@ -14,12 +16,68 @@ import (
 // The result must be a file path inside the workspace. ".." and any symlink
 // along the path are rejected, so a link cannot redirect the write outside.
 func ResolveOutputPath(output string) (string, error) {
-	output = strings.TrimSpace(output)
-	if output == "" {
-		return "", fmt.Errorf("output is required")
+	return resolveInsideWorkspace(output, "output is required", "output path is invalid", "output path")
+}
+
+// maxPromptFileBytes is the prompt-file size limit (16 KiB).
+const maxPromptFileBytes = 16 * 1024
+
+// ReadPromptFile reads a UTF-8 prompt from a regular file inside the workspace.
+// The path uses the same confinement as an output file: ".." and any symlink
+// are rejected. The returned text is space-trimmed and non-empty.
+func ReadPromptFile(path string) (string, error) {
+	abs, err := resolveInsideWorkspace(path, "prompt-file is required", "prompt-file path is invalid", "prompt-file")
+	if err != nil {
+		return "", err
 	}
-	if strings.ContainsRune(output, 0) {
-		return "", fmt.Errorf("output path is invalid")
+
+	info, err := os.Lstat(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("prompt-file not found")
+		}
+		return "", fmt.Errorf("prompt-file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("prompt-file must be a regular file")
+	}
+	if info.Size() > maxPromptFileBytes {
+		return "", fmt.Errorf("prompt-file exceeds 16 KiB")
+	}
+
+	file, err := os.Open(abs)
+	if err != nil {
+		return "", fmt.Errorf("prompt-file: %w", err)
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxPromptFileBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("prompt-file: %w", err)
+	}
+	if int64(len(data)) > maxPromptFileBytes {
+		return "", fmt.Errorf("prompt-file exceeds 16 KiB")
+	}
+	if !utf8.Valid(data) {
+		return "", fmt.Errorf("prompt-file must be UTF-8 text")
+	}
+	text := strings.TrimSpace(string(data))
+	if text == "" {
+		return "", fmt.Errorf("prompt-file is empty")
+	}
+	return text, nil
+}
+
+// resolveInsideWorkspace maps path to an absolute file path inside the workspace.
+// emptyMsg and invalidMsg are the blank and NUL errors. label names the path in
+// confinement errors, so a prompt file does not reuse output wording.
+func resolveInsideWorkspace(path, emptyMsg, invalidMsg, label string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("%s", emptyMsg)
+	}
+	if strings.ContainsRune(path, 0) {
+		return "", fmt.Errorf("%s", invalidMsg)
 	}
 
 	root, err := workspaceRoot()
@@ -28,13 +86,12 @@ func ResolveOutputPath(output string) (string, error) {
 	}
 
 	var abs string
-	if filepath.IsAbs(output) {
-		abs = filepath.Clean(output)
+	if filepath.IsAbs(path) {
+		abs = filepath.Clean(path)
 	} else {
-		abs = filepath.Clean(filepath.Join(root, output))
+		abs = filepath.Clean(filepath.Join(root, path))
 	}
-
-	if err := confine(root, abs, false); err != nil {
+	if err := walkComponents(root, abs, false, nil, false, label); err != nil {
 		return "", err
 	}
 	return abs, nil
@@ -66,7 +123,7 @@ func MkdirWithin(dir string) error {
 	}
 	return walkComponents(root, filepath.Clean(dir), true, func(current string) error {
 		return os.Mkdir(current, 0o755)
-	}, true)
+	}, true, "output path")
 }
 
 func workspaceRoot() (string, error) {
@@ -101,19 +158,19 @@ func ProbeWritable(dir string) error {
 // component is a symlink. allowRoot permits abs to be root itself, which
 // directory creation needs and file outputs do not.
 func confine(root, abs string, allowRoot bool) error {
-	return walkComponents(root, abs, allowRoot, nil, false)
+	return walkComponents(root, abs, allowRoot, nil, false, "output path")
 }
 
 // walkComponents applies one path walk to both checks and directory creation.
 // onMissing is nil when a missing component ends the walk. requireDir rejects
 // an existing file where a directory is required.
-func walkComponents(root, abs string, allowRoot bool, onMissing func(current string) error, requireDir bool) error {
-	if err := lexicalInside(root, abs, allowRoot); err != nil {
+func walkComponents(root, abs string, allowRoot bool, onMissing func(current string) error, requireDir bool, label string) error {
+	if err := lexicalInside(root, abs, allowRoot, label); err != nil {
 		return err
 	}
 	rel, err := filepath.Rel(root, abs)
 	if err != nil {
-		return fmt.Errorf("output path: %w", err)
+		return fmt.Errorf("%s: %w", label, err)
 	}
 	if rel == "." {
 		return nil
@@ -142,38 +199,38 @@ func walkComponents(root, abs string, allowRoot bool, onMissing func(current str
 				}
 				continue
 			}
-			return fmt.Errorf("output path: %w", statErr)
+			return fmt.Errorf("%s: %w", label, statErr)
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("output path must not contain a symlink")
+			return fmt.Errorf("%s must not contain a symlink", label)
 		}
 		if requireDir && !info.IsDir() {
 			return fmt.Errorf("create output directory: not a directory")
 		}
 		resolved, err := filepath.EvalSymlinks(current)
 		if err != nil {
-			return fmt.Errorf("output path: %w", err)
+			return fmt.Errorf("%s: %w", label, err)
 		}
-		if err := lexicalInside(resolvedRoot, resolved, true); err != nil {
+		if err := lexicalInside(resolvedRoot, resolved, true, label); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func lexicalInside(root, abs string, allowRoot bool) error {
+func lexicalInside(root, abs string, allowRoot bool, label string) error {
 	rel, err := filepath.Rel(root, filepath.Clean(abs))
 	if err != nil {
-		return fmt.Errorf("output path: %w", err)
+		return fmt.Errorf("%s: %w", label, err)
 	}
 	if rel == "." {
 		if allowRoot {
 			return nil
 		}
-		return fmt.Errorf("output path must be a file inside the workspace")
+		return fmt.Errorf("%s must be a file inside the workspace", label)
 	}
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return fmt.Errorf("output path must be inside the workspace")
+		return fmt.Errorf("%s must be inside the workspace", label)
 	}
 	return nil
 }
