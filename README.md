@@ -36,9 +36,9 @@ Text-to-video uses [Seedance 2.5](https://docs.higgsfield.ai/docs/models/seedanc
 
 `aspect-ratio` defaults to `16:9`, `resolution` to `720p`, and `duration` to `5` when `model` is Seedance 2.5 text-to-video. `duration` is rejected for image models.
 
-Pin a release with `@v0.1.0` if you need a fixed revision. `@v1` is the floating major tag (see [RELEASING.md](RELEASING.md)).
+`@v1` follows the latest 1.x release. What that release contains is listed in [CHANGELOG.md](CHANGELOG.md). Pin a full version from that list, such as `@v1.2.0`, when a workflow should stay on one release.
 
-Set `prompt` or `prompt-file`, not both. `prompt-file` is a workspace-relative UTF-8 text file (16 KiB maximum). The Action trims it and uses that text as the prompt.
+Set `prompt` or `prompt-file`, not both. `prompt-file` is a path inside your repository, relative to the workspace, to a UTF-8 text file of at most 16 KiB. The Action trims that file and uses the text as the prompt. A workflow that passes only `prompt` stays valid.
 
 ### Recipes
 
@@ -75,36 +75,19 @@ Create a repository secret `HIGGSFIELD_API_KEY` with your credentials in **`KEY_
 | `video-url` | Generated video CDN URL (Seedance 2.5 runs) |
 | `output-path` | Workspace-relative path of the saved file |
 
-## Development
-
-```bash
-go test ./...
-go build -o higgsfield-action ./cmd/higgsfield-action
-docker build -t higgsfield-action .
-```
-
-### Integration test (GitHub)
-
-1. Add secret `HIGGSFIELD_API_KEY` to the repository.
-2. Run **Actions → Integration → Run workflow** ([integration.yml](.github/workflows/integration.yml)).
-3. Download the artifact from the completed run. Image runs upload `higgsfield-image`. Video runs upload `higgsfield-video`.
-
-The workflow dispatch form accepts `model` and `duration`. Leave them at the defaults for an image. For a video run, set `model` to `bytedance/seedance-2.5/text-to-video` and `output` to a path such as `output/integration.mp4`. `duration` can stay empty (the Action uses 5 seconds).
-
-That form sends `prompt`. To try `prompt-file`, point a caller workflow at a UTF-8 text file in the workspace (see [Recipes](#recipes)). Do not set both inputs.
-
-### Troubleshooting
+## Troubleshooting
 
 | Error | What to do |
 |-------|------------|
-| `api-key is required` | The Action now reads Docker's `INPUT_API-KEY`. Update to a commit that includes that fix and rerun. |
-| `not enough credits` / HTTP 403 | The API key is valid, but the Higgsfield account has no remaining credits. Add credits in [Higgsfield Cloud](https://console.higgsfield.ai) and rerun. |
-| `create output directory: ... permission denied` | The container runs as uid 1001, the user that owns `GITHUB_WORKSPACE`. Update to a commit that sets `USER 1001` and rerun. |
-| Later step cannot find `output-path` | `output-path` is workspace-relative (not `/github/workspace/...`). Use `$GITHUB_WORKSPACE/${{ steps.higgsfield.outputs.output-path }}` or the `output` input. |
+| `api-key is required` | Create the repository secret `HIGGSFIELD_API_KEY` and pass it as `api-key`. |
+| `prompt or prompt-file is required` / `set prompt or prompt-file, not both` | Pass one of the two inputs. |
+| `not enough credits` / HTTP 403 | The API key is valid, and the Higgsfield account has no remaining credits. Add credits in [Higgsfield Cloud](https://console.higgsfield.ai) and rerun. |
+| `create output directory: ... permission denied` | Use `@v1` or a 1.x release from [CHANGELOG.md](CHANGELOG.md). Older builds cannot write the workspace. |
+| Later step cannot find `output-path` | `output-path` is relative to the workspace. Use `$GITHUB_WORKSPACE/${{ steps.higgsfield.outputs.output-path }}` or the same path you passed as `output`. |
 
-## Releasing
+## Changes
 
-See [CHANGELOG.md](CHANGELOG.md) for notable changes, and [RELEASING.md](RELEASING.md) for tagging `v1` / `v0.1.0` and Marketplace notes.
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Support
 

@@ -58,6 +58,24 @@ These steps were for `v0.1.0`. Later releases draft the GitHub Release from [CHA
    git push -f origin v1
    ```
 
+## Check the Action before tagging
+
+```bash
+go test ./...
+go build -o higgsfield-action ./cmd/higgsfield-action
+docker build -t higgsfield-action .
+```
+
+Integration on this repository:
+
+1. Add secret `HIGGSFIELD_API_KEY`.
+2. Run **Actions → Integration → Run workflow** ([integration.yml](.github/workflows/integration.yml)).
+3. Download the artifact. Image runs upload `higgsfield-image`. Video runs upload `higgsfield-video`.
+
+The form sends `prompt`. Leave `model` and `duration` at the defaults for an image. For a video run, set `model` to `bytedance/seedance-2.5/text-to-video` and `output` to a path such as `output/integration.mp4`. `duration` can stay empty.
+
+`prompt-file` is covered by the caller examples in [README.md](README.md). The integration form does not send it.
+
 ## Pre-release checklist
 
 - [ ] `go test ./...` passes locally
